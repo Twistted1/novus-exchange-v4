@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+:root {
+  /* Deep minimalist near-black obsidian shade for rich, immersive depth */
+  --pitch-black: #06080C;
+  --deep-near-black: #07090D;
+  --deep-near-black-surface: #0E1118;
+  --bronze-gold: #A36E3C;
+  --bronze-gold-light: #C48E56;
+  --brilliant-white: #FFFFFF;
+  --pulse-red: #C92A35;
+  --pulse-red-glow: rgba(201, 42, 53, 0.45);
+  --silver: #A1A5AB;
+  --silver-light: #D4D7DC;
+}
+
+body {
+  background-color: var(--pitch-black);
+  color: var(--brilliant-white);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Typography styles */
+.font-brand {
+  font-family: 'Cinzel', Georgia, serif;
+}
+
+.font-editorial {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+}
+
+.font-sans {
+  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Metallic Silver Sculpted Text Effect matching Novus Wordmark */
+.silver-beveled-text {
+  background: linear-gradient(180deg, #FFFFFF 0%, #D8DBDF 30%, #A1A5AB 60%, #767B84 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
+}
+
+.silver-sub-text {
+  background: linear-gradient(180deg, #E5E7EB 0%, #A1A5AB 65%, #6B7280 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Subtle, captivating light shimmer that glides across brilliant white typography */
+@keyframes textLightShimmer {
+  0% {
+    background-position: 150% 0;
+  }
+  100% {
+    background-position: -150% 0;
+  }
+}
+
+.text-shimmer {
+  background: linear-gradient(
+    110deg,
+    #FFFFFF 0%,
+    #FFFFFF 35%,
+    #E8ECF2 42%,
+    #FFFFFF 47%,
+    #C8D1DC 51%,
+    #FFFFFF 56%,
+    #FFFFFF 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: textLightShimmer 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  display: inline-block;
+}
+
+/* Bronze-Gold gradient utility */
+.bronze-gradient-text {
+  background: linear-gradient(135deg, #DEAE78 0%, #A36E3C 55%, #7A4F26 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.bronze-border-glow {
+  border-color: rgba(163, 110, 60, 0.35);
+  box-shadow: 0 0 20px rgba(163, 110, 60, 0.1);
+}
+
+.pulse-red-glow {
+  box-shadow: 0 0 25px rgba(201, 42, 53, 0.35);
+}

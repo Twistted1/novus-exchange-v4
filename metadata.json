@@ -1,0 +1,11 @@
+{
+  "name": "Novus Exchange",
+  "description": "An investigative journalism and advanced media enterprise portal. Bringing hidden truth and geopolitical analysis to light.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
