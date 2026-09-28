@@ -73,8 +73,8 @@ export default function ArticlesSection() {
     return () => window.removeEventListener("novus_articles_updated", handleUpdate);
   }, []);
 
-  // Categories requested: Tech-AI - Green-Tech - CSR - Brazil (remove Media)
-  const categories: ("All" | Category)[] = [
+  // Categories requested: Tech-AI - Green-Tech - CSR - Brazil + any custom categories added via CMS
+  const baseCategories: ("All" | Category | string)[] = [
     "All",
     "Geopolitics",
     "Economics",
@@ -83,6 +83,14 @@ export default function ArticlesSection() {
     "CSR",
     "Brazil"
   ];
+
+  // Dynamically include any custom categories created in CMS
+  const categories = Array.from(
+    new Set([
+      ...baseCategories,
+      ...articlesList.map((a) => a.category).filter(Boolean)
+    ])
+  );
 
   const authorOptions: ("All" | SigningAuthorType)[] = ["All", "Novus AI", "Marcio", "Guest"];
 

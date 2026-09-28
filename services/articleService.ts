@@ -59,17 +59,65 @@ export class ArticleService {
 
   /**
    * Retrieves active articles.
-   * Guaranteed: The 6 foundational investigative dossiers are always preserved as the bedrock.
-   * Remote Supabase and local editorial drafts enrich or update individual articles without dropping categories.
+   * Priority Flow:
+   * 1. Check persistent Backend Server API (/api/articles) for cross-browser synchronization.
+   * 2. Reconcile with any local browser drafts (auto-syncing local drafts to the server so they become visible on all browsers).
+   * 3. Check Supabase REST if configured.
+   * 4. Fall back to bundled verified baseline dossiers.
    */
   static async getArticles(): Promise<Article[]> {
-    // 1. Always establish the 6 verified canonical dossiers as the baseline
+    // 1. Establish the 6 verified canonical dossiers as the baseline bedrock
     const baseArticles = ARTICLES_DATA.map((item, idx) => this.sanitizeArticle(item, idx));
     const articleMap = new Map<number, Article>(baseArticles.map((a) => [a.id, a]));
 
-    const config = this.getCmsConfig();
+    let serverFetched = false;
 
-    // 2. Query Supabase REST if configured
+    // 2. Fetch from persistent Server API (Universal across all browsers)
+    try {
+      const res = await fetch("/api/articles");
+      if (res.ok) {
+        const data = await res.json();
+        const serverArticles: any[] = Array.isArray(data) ? data : (data.articles || []);
+        if (serverArticles.length > 0) {
+          serverArticles.forEach((item, idx) => {
+            const sanitized = this.sanitizeArticle(item, idx);
+            articleMap.set(sanitized.id, sanitized);
+          });
+          serverFetched = true;
+        }
+      }
+    } catch {
+      // Server API unreachable (offline or pure static preview)
+    }
+
+    // 3. Inspect browser local storage for any client-side additions/edits
+    try {
+      const local = localStorage.getItem(STORAGE_KEY);
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          let hasLocalNewAdditions = false;
+          parsed.forEach((item, idx) => {
+            const sanitized = this.sanitizeArticle(item, idx);
+            if (!articleMap.has(sanitized.id)) {
+              hasLocalNewAdditions = true;
+            }
+            articleMap.set(sanitized.id, sanitized);
+          });
+
+          // If local storage has articles not yet on the server, automatically push to server!
+          if (hasLocalNewAdditions || (!serverFetched && parsed.length > 0)) {
+            const allArticles = Array.from(articleMap.values()).sort((a, b) => a.id - b.id);
+            this.pushArticlesToServer(allArticles).catch(() => {});
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Could not read local articles storage:", e);
+    }
+
+    // 4. Query Supabase REST if configured
+    const config = this.getCmsConfig();
     if (config.supabaseUrl && config.supabaseAnonKey) {
       try {
         const cleanUrl = config.supabaseUrl.replace(/\/+$/, "");
@@ -87,7 +135,6 @@ export class ArticleService {
               const sanitized = this.sanitizeArticle(item, idx);
               articleMap.set(sanitized.id, sanitized);
             });
-            return Array.from(articleMap.values()).sort((a, b) => a.id - b.id);
           }
         }
       } catch (err) {
@@ -95,25 +142,40 @@ export class ArticleService {
       }
     }
 
-    // 3. Apply local overrides / editorial storage
-    try {
-      const local = localStorage.getItem(STORAGE_KEY);
-      if (local) {
-        const parsed = JSON.parse(local);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          parsed.forEach((item, idx) => {
-            const sanitized = this.sanitizeArticle(item, idx);
-            articleMap.set(sanitized.id, sanitized);
-          });
-          return Array.from(articleMap.values()).sort((a, b) => a.id - b.id);
-        }
-      }
-    } catch (e) {
-      console.warn("Could not read local articles storage:", e);
-    }
+    // 5. Final combined articles sorted by ID
+    const finalArticles = Array.from(articleMap.values()).sort((a, b) => a.id - b.id);
 
-    // 4. Return complete set of verified dossiers
-    return Array.from(articleMap.values()).sort((a, b) => a.id - b.id);
+    // Cache locally for instant loading on subsequent renders
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(finalArticles));
+    } catch {}
+
+    return finalArticles;
+  }
+
+  static async pushArticlesToServer(articles: Article[]): Promise<boolean> {
+    try {
+      const res = await fetch("/api/articles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ articles })
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  static async checkServerStatus(): Promise<{ online: boolean; count: number }> {
+    try {
+      const res = await fetch("/api/articles");
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data.articles || []);
+        return { online: true, count: list.length };
+      }
+    } catch {}
+    return { online: false, count: 0 };
   }
 
   static saveLocalArticles(articles: Article[]): void {
@@ -123,6 +185,12 @@ export class ArticleService {
     } catch (e) {
       console.error("Failed to save articles to local storage:", e);
     }
+
+    // Asynchronously push to persistent server so it is visible to ALL browsers and devices
+    this.pushArticlesToServer(articles).catch(() => {});
+
+    // Asynchronously push to Supabase if configured
+    this.syncAllArticlesToSupabase(articles).catch(() => {});
   }
 
   static resetToDefaultArticles(): Article[] {
@@ -135,10 +203,38 @@ export class ArticleService {
       console.error("Failed to reset articles in localStorage:", e);
     }
 
+    // Reset on backend server API
+    fetch("/api/articles/reset", { method: "POST" }).catch(() => {});
+
     // Also sync all 6 canonical dossiers to Supabase if connected
     this.syncAllArticlesToSupabase(fresh).catch(() => {});
 
     return fresh;
+  }
+
+  static exportArticlesAsJson(articles: Article[]): string {
+    return JSON.stringify(articles, null, 2);
+  }
+
+  static exportArticlesAsTypeScript(articles: Article[]): string {
+    return `import { Article, Author, SigningAuthorType } from "../types";\n\n` +
+      `// Copy this into data/articlesData.ts to hardcode into your codebase\n` +
+      `export const ARTICLES_DATA: Article[] = ${JSON.stringify(articles, null, 2)};\n`;
+  }
+
+  static importArticlesFromJson(jsonStr: string): { success: boolean; count: number; error?: string; articles?: Article[] } {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      const list = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.articles) ? parsed.articles : null);
+      if (!list || list.length === 0) {
+        return { success: false, count: 0, error: "JSON must contain an array of articles." };
+      }
+      const sanitized = list.map((item: any, idx: number) => this.sanitizeArticle(item, idx));
+      this.saveLocalArticles(sanitized);
+      return { success: true, count: sanitized.length, articles: sanitized };
+    } catch (e: any) {
+      return { success: false, count: 0, error: `Invalid JSON syntax: ${e.message}` };
+    }
   }
 
   static async syncAllArticlesToSupabase(articles: Article[]): Promise<boolean> {

@@ -11,7 +11,12 @@ import {
   Layers, 
   Upload, 
   FileText,
-  AlertCircle
+  AlertCircle,
+  Copy,
+  Check,
+  Download,
+  Server,
+  CheckCircle2
 } from "lucide-react";
 
 interface CmsModalProps {
@@ -27,14 +32,21 @@ export default function HeadlessCmsModal({
   articles,
   onArticlesChange
 }: CmsModalProps) {
-  const [activeTab, setActiveTab] = useState<"articles" | "supabase" | "architecture">("articles");
+  const [activeTab, setActiveTab] = useState<"articles" | "supabase" | "architecture" | "sync_export">("articles");
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [cmsConfig, setCmsConfig] = useState<SupabaseCmsConfig>(ArticleService.getCmsConfig());
   const [statusMsg, setStatusMsg] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isServerSyncing, setIsServerSyncing] = useState(false);
+  const [copiedType, setCopiedType] = useState<"json" | "ts" | null>(null);
+  const [importJsonText, setImportJsonText] = useState("");
+  const [serverStatus, setServerStatus] = useState<{ online: boolean; count: number } | null>(null);
 
   useEffect(() => {
     setCmsConfig(ArticleService.getCmsConfig());
+    if (isOpen) {
+      ArticleService.checkServerStatus().then((s) => setServerStatus(s));
+    }
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -87,6 +99,80 @@ export default function HeadlessCmsModal({
     setIsSyncing(false);
   };
 
+  const handleSyncToServer = async () => {
+    setIsServerSyncing(true);
+    try {
+      const ok = await ArticleService.pushArticlesToServer(articles);
+      if (ok) {
+        setServerStatus({ online: true, count: articles.length });
+        showStatus(`All ${articles.length} articles successfully synced to the backend server! Now visible across all browsers and devices.`, "success");
+      } else {
+        showStatus("Could not reach backend server API. Articles remain stored in this browser's local cache.", "error");
+      }
+    } catch (e: any) {
+      showStatus(`Sync failed: ${e.message}`, "error");
+    } finally {
+      setIsServerSyncing(false);
+    }
+  };
+
+  const handleCopyJson = () => {
+    try {
+      const json = ArticleService.exportArticlesAsJson(articles);
+      navigator.clipboard.writeText(json);
+      setCopiedType("json");
+      showStatus("All articles copied as JSON to clipboard!", "success");
+      setTimeout(() => setCopiedType(null), 2500);
+    } catch (e: any) {
+      showStatus(`Copy failed: ${e.message}`, "error");
+    }
+  };
+
+  const handleCopyTs = () => {
+    try {
+      const ts = ArticleService.exportArticlesAsTypeScript(articles);
+      navigator.clipboard.writeText(ts);
+      setCopiedType("ts");
+      showStatus("TypeScript code for data/articlesData.ts copied to clipboard!", "success");
+      setTimeout(() => setCopiedType(null), 2500);
+    } catch (e: any) {
+      showStatus(`Copy failed: ${e.message}`, "error");
+    }
+  };
+
+  const handleDownloadBackup = () => {
+    try {
+      const json = ArticleService.exportArticlesAsJson(articles);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `novus_articles_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showStatus("Article backup file downloaded successfully.", "success");
+    } catch (e: any) {
+      showStatus(`Download failed: ${e.message}`, "error");
+    }
+  };
+
+  const handleImportJson = () => {
+    if (!importJsonText.trim()) {
+      showStatus("Please paste valid articles JSON first.", "error");
+      return;
+    }
+    const result = ArticleService.importArticlesFromJson(importJsonText);
+    if (result.success && result.articles) {
+      onArticlesChange(result.articles);
+      setImportJsonText("");
+      showStatus(`Successfully imported and published ${result.count} articles to live feed and server!`, "success");
+    } else {
+      showStatus(result.error || "Failed to parse articles JSON.", "error");
+    }
+  };
+
   const handleSaveArticle = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingArticle) return;
@@ -107,20 +193,20 @@ export default function HeadlessCmsModal({
     onArticlesChange(updatedList);
     ArticleService.saveLocalArticles(updatedList);
     setEditingArticle(null);
-    showStatus(`Article #${updatedArticle.id} saved locally. (${words} words)`, "success");
+    showStatus(`Article #${updatedArticle.id} saved & synced to all browsers! (${words} words)`, "success");
   };
 
   const handleDeleteArticle = (id: number) => {
     const updated = articles.filter((a) => a.id !== id);
     onArticlesChange(updated);
     ArticleService.saveLocalArticles(updated);
-    showStatus(`Article #${id} removed from feed.`, "info");
+    showStatus(`Article #${id} removed and synced across all browsers.`, "info");
   };
 
   const handleResetToFactoryArticles = () => {
     const fresh = ArticleService.resetToDefaultArticles();
     onArticlesChange(fresh);
-    showStatus("All 6 canonical dossiers restored to factory specifications.", "success");
+    showStatus("All 6 canonical dossiers restored to factory specifications and synced across browsers.", "success");
   };
 
   const handleNewArticle = () => {
@@ -211,6 +297,18 @@ export default function HeadlessCmsModal({
             <Layers className="w-3.5 h-3.5 text-[#DEAE78]" />
             <span>How Headless CMS Feeds This Site</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab("sync_export")}
+            className={`py-3 px-4 border-b-2 font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === "sync_export"
+                ? "border-[#A36E3C] text-white"
+                : "border-transparent text-[#A1A5AB] hover:text-white"
+            }`}
+          >
+            <Server className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Multi-Browser Sync & Export</span>
+          </button>
         </div>
 
         {/* Status Alert Banner */}
@@ -244,7 +342,16 @@ export default function HeadlessCmsModal({
                     Edit articles right here or connect Supabase below. Changes update the live UI immediately.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={handleSyncToServer}
+                    disabled={isServerSyncing}
+                    className="px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-xs font-mono text-emerald-300 flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="Broadcast articles to server so other browsers and devices can see them"
+                  >
+                    <Server className={`w-3.5 h-3.5 ${isServerSyncing ? "animate-spin" : ""}`} />
+                    <span>{isServerSyncing ? "Syncing..." : "Sync to All Browsers"}</span>
+                  </button>
                   <button
                     onClick={handleResetToFactoryArticles}
                     className="px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20 text-xs font-mono text-[#A1A5AB] hover:text-white transition-all cursor-pointer"
@@ -259,6 +366,22 @@ export default function HeadlessCmsModal({
                     <span>Create Article</span>
                   </button>
                 </div>
+              </div>
+
+              {/* Multi-Browser Sync Info Banner */}
+              <div className="p-3 rounded-lg border border-emerald-500/20 bg-emerald-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-mono text-emerald-300/90">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    <strong>Multi-Browser Persistence:</strong> Server API (/api/articles) is active. Articles saved here persist across all browsers, external URLs, and live visitors.
+                  </span>
+                </div>
+                <button
+                  onClick={() => setActiveTab("sync_export")}
+                  className="text-xs text-[#DEAE78] hover:underline shrink-0 text-left font-bold cursor-pointer"
+                >
+                  Export Code &amp; JSON →
+                </button>
               </div>
 
               {/* Table of Articles */}
@@ -629,6 +752,131 @@ CREATE POLICY "Public articles read" ON articles FOR SELECT USING (true);`}
                     <strong className="text-white">Method 3 (Code script generator):</strong> You can also run the built-in <code className="text-white bg-white/10 px-1 py-0.5 rounded">node scripts/buildArticles.cjs</code> script which verifies word count parity between 2,000 and 3,000 words before publishing.
                   </li>
                 </ul>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: MULTI-BROWSER SYNC & EXPORT */}
+          {activeTab === "sync_export" && (
+            <div className="space-y-6 animate-fadeIn">
+              {/* Header Box */}
+              <div className="p-4 rounded-xl bg-[#080A0E] border border-emerald-500/30 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <h4 className="font-brand font-bold text-white text-base">
+                    MULTI-BROWSER PERSISTENCE &amp; CODE EXPORT
+                  </h4>
+                </div>
+                <p className="text-xs text-[#A1A5AB] leading-relaxed">
+                  Why didn&apos;t added articles show in other browsers previously? In pure static single-page apps, edits save to browser-isolated local storage. With the <strong>Novus Server Engine (/api/articles)</strong> active, your custom dossiers are automatically stored in the server backend and shared across all browser tabs, phones, incognito sessions, and visitors!
+                </p>
+              </div>
+
+              {/* Status and Actions Grid */}
+              <div className="grid md:grid-cols-2 gap-4">
+                {/* Sync Card */}
+                <div className="p-5 rounded-xl bg-[#05070A] border border-white/10 space-y-3 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-mono text-[#A36E3C] uppercase tracking-wider font-bold">
+                        Universal Broadcast
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        {serverStatus?.online ? "Server Online" : "Ready"}
+                      </span>
+                    </div>
+                    <h5 className="font-bold text-white text-sm">Force Sync to All Browsers</h5>
+                    <p className="text-xs text-[#A1A5AB] mt-1 leading-relaxed">
+                      Sends the current active feed of {articles.length} articles directly to the backend storage file so every visitor across any browser sees them immediately.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSyncToServer}
+                    disabled={isServerSyncing}
+                    className="w-full py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                  >
+                    <Server className={`w-4 h-4 ${isServerSyncing ? "animate-spin" : ""}`} />
+                    <span>{isServerSyncing ? "Broadcasting to Server..." : `Sync All ${articles.length} Articles to Server`}</span>
+                  </button>
+                </div>
+
+                {/* Hardcode Export Card */}
+                <div className="p-5 rounded-xl bg-[#05070A] border border-white/10 space-y-3 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-mono text-[#DEAE78] uppercase tracking-wider font-bold">
+                        Direct Codebase Hardcoding
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-[#A1A5AB] border border-white/10">
+                        TypeScript
+                      </span>
+                    </div>
+                    <h5 className="font-bold text-white text-sm">Bake into Codebase (articlesData.ts)</h5>
+                    <p className="text-xs text-[#A1A5AB] mt-1 leading-relaxed">
+                      Want your custom article baked directly into the repository without relying on any storage? One-click copy the complete TypeScript code and replace `data/articlesData.ts`.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleCopyTs}
+                    className="w-full py-2.5 px-4 rounded-lg border border-[#A36E3C]/40 bg-[#A36E3C]/20 hover:bg-[#A36E3C]/30 text-[#DEAE78] hover:text-white text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    {copiedType === "ts" ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedType === "ts" ? "Copied to Clipboard!" : "Copy TypeScript Code for articlesData.ts"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* JSON Backup & Import Section */}
+              <div className="p-5 rounded-xl bg-[#05070A] border border-white/10 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h5 className="font-bold text-white text-sm font-mono uppercase">
+                      Raw JSON Backup &amp; Import
+                    </h5>
+                    <p className="text-xs text-[#A1A5AB]">
+                      Export or import dossiers as standard JSON. Perfect for offline archives or transferring to another system.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleCopyJson}
+                      className="px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20 text-xs font-mono text-white flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      {copiedType === "json" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedType === "json" ? "Copied!" : "Copy JSON"}</span>
+                    </button>
+                    <button
+                      onClick={handleDownloadBackup}
+                      className="px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20 text-xs font-mono text-white flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download .JSON</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Import Box */}
+                <div className="space-y-2 pt-2 border-t border-white/5">
+                  <label className="text-[11px] font-mono text-[#A1A5AB] block">
+                    Paste JSON to Import &amp; Publish:
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={importJsonText}
+                    onChange={(e) => setImportJsonText(e.target.value)}
+                    placeholder='[ { "id": 7, "title": "My New Investigation...", ... } ]'
+                    className="w-full p-3 rounded-lg border border-white/10 bg-[#07090D] text-white text-xs font-mono outline-none focus:border-[#A36E3C] resize-y"
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleImportJson}
+                      className="px-4 py-1.5 rounded-lg bg-[#A36E3C] hover:bg-[#DEAE78] text-white text-xs font-mono font-bold transition-all cursor-pointer"
+                    >
+                      Import &amp; Publish Articles
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

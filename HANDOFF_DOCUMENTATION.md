@@ -209,10 +209,11 @@ File references: `services/articleService.ts`, `components/HeadlessCmsModal.tsx`
 └───────────────────────────┘
 ```
 
-The data service uses a 3-tier fallback strategy (`ArticleService.getArticles()`):
-1. **Tier 1 (Supabase PostgreSQL):** If `supabaseUrl` and `supabaseAnonKey` are configured, queries the remote database.
-2. **Tier 2 (Browser Local Storage):** If offline or in demo mode, checks for customized articles saved in `localStorage`.
-3. **Tier 3 (Bundled Verified Dossiers):** If no remote or local overrides exist, loads the 6 pre-compiled 2,000–3,000 word articles from `data/articlesData.ts`.
+The data service uses a resilient 4-tier storage and synchronization pipeline (`ArticleService.getArticles()`):
+1. **Tier 1 (Universal Server API & Storage):** Queries `/api/articles` backed by `data/persisted_articles.json`. Articles saved in the CMS are broadcast to all browsers, external URLs, phones, and live visitors universally.
+2. **Tier 2 (Supabase PostgreSQL Database):** If `supabaseUrl` and `supabaseAnonKey` are configured, optionally queries or syncs to your remote Supabase cloud database.
+3. **Tier 3 (Browser Local Storage Cache):** Caches the feed in `localStorage` for offline resiliency and instant first-paint loads. Local drafts automatically auto-sync to the server on load.
+4. **Tier 4 (Bundled Verified Dossiers):** Bedrock fallback guarantees the 6 foundational 2,000–3,000 word dossiers from `data/articlesData.ts` are always intact.
 
 ### 4.2 Supabase PostgreSQL Database Schema
 Run this SQL script inside your **Supabase Dashboard → SQL Editor** to create the table:
