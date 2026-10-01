@@ -3,6 +3,8 @@ import { Article, Category, SigningAuthorType } from "../types";
 import { ARTICLES_DATA, AUTHORS } from "../data/articlesData";
 import { ArticleService } from "../services/articleService";
 import HeadlessCmsModal from "./HeadlessCmsModal";
+import ArticleAudioPlayer from "./ArticleAudioPlayer";
+import { SpeechService } from "../services/speechService";
 import { 
   Search, 
   Calendar, 
@@ -15,7 +17,9 @@ import {
   UserCheck, 
   FileText,
   Database,
-  RotateCcw
+  RotateCcw,
+  Volume2,
+  Play
 } from "lucide-react";
 
 export default function ArticlesSection() {
@@ -358,14 +362,28 @@ export default function ArticlesSection() {
                       </div>
                     </div>
 
-                    {/* Action read trigger */}
-                    <button
-                      onClick={() => setReadingArticle(article)}
-                      className="text-[#C92A35] hover:text-white group-hover:translate-x-0.5 transition-all duration-200 flex items-center gap-1 text-[11px] font-mono font-bold uppercase tracking-wider cursor-pointer"
-                    >
-                      <span>READ</span>
-                      <ArrowUpRight className="w-3.5 h-3.5" />
-                    </button>
+                    {/* Action read and listen triggers */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          SpeechService.playArticle(article);
+                        }}
+                        className="px-2 py-1 rounded-md border border-[#DEAE78]/30 bg-[#A36E3C]/10 hover:bg-[#A36E3C]/25 text-[#DEAE78] hover:text-white transition-all flex items-center gap-1 text-[10px] font-mono font-bold cursor-pointer"
+                        title="Listen to this article with deep baritone narrator voice"
+                      >
+                        <Volume2 className="w-3 h-3 text-emerald-400" />
+                        <span>LISTEN</span>
+                      </button>
+
+                      <button
+                        onClick={() => setReadingArticle(article)}
+                        className="text-[#C92A35] hover:text-white group-hover:translate-x-0.5 transition-all duration-200 flex items-center gap-1 text-[11px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+                      >
+                        <span>READ</span>
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -466,6 +484,36 @@ export default function ArticlesSection() {
                     </div>
                   );
                 })()}
+
+                {/* Audio Narration Bar in Reader */}
+                <div className="my-2 p-3.5 rounded-xl border border-[#A36E3C]/40 bg-[#040507] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[0_0_15px_rgba(163,110,60,0.12)]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-[#A36E3C]/20 border border-[#A36E3C]/40 flex items-center justify-center text-[#DEAE78] shrink-0">
+                      <Volume2 className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white uppercase font-mono tracking-wide">
+                          Audio Narration (Read Aloud)
+                        </span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          Neural Voice · Christopher (Literary Baritone)
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#A1A5AB] font-mono mt-0.5">
+                        High-fidelity neural narration matching literary documentary baritone cadence.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => SpeechService.playArticle(readingArticle)}
+                    className="px-4 py-2 rounded-lg bg-[#A36E3C] hover:bg-[#DEAE78] text-white text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all shadow cursor-pointer shrink-0"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Listen to Dossier</span>
+                  </button>
+                </div>
               </div>
 
               {/* Artwork presentation */}
@@ -551,6 +599,9 @@ export default function ArticlesSection() {
         articles={articlesList}
         onArticlesChange={(updated) => setArticlesList(updated)}
       />
+
+      {/* Persistent Audio Narration Player Bar */}
+      <ArticleAudioPlayer />
     </section>
   );
 }
