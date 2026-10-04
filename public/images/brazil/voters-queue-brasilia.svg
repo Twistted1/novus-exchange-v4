@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="100%" height="100%">
+  <defs>
+    <linearGradient id="skyBrasilia" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="50%" stop-color="#BAE6FD"/>
+      <stop offset="100%" stop-color="#E0F2FE"/>
+    </linearGradient>
+    <linearGradient id="floorReflect" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E2E8F0"/>
+      <stop offset="60%" stop-color="#CBD5E1"/>
+      <stop offset="100%" stop-color="#94A3B8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Bright Brasília Sky -->
+  <rect width="1600" height="900" fill="url(#skyBrasilia)"/>
+
+  <!-- Iconic National Congress Architecture in Background through Glass -->
+  <!-- Lake Paranoá & Grass Lawn -->
+  <rect x="0" y="320" width="1600" height="180" fill="#65A30D" opacity="0.6"/>
+  <rect x="0" y="360" width="1600" height="60" fill="#38BDF8" opacity="0.4"/>
+
+  <!-- Twin Towers of Brazilian Congress -->
+  <rect x="290" y="100" width="45" height="280" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <rect x="345" y="100" width="45" height="280" fill="#F1F5F9" stroke="#E2E8F0" stroke-width="1.5"/>
+  <!-- Connecting bridge -->
+  <rect x="330" y="210" width="25" height="40" fill="#E2E8F0"/>
+
+  <!-- Senate / Chamber Domes -->
+  <!-- Senate dome (inverted) -->
+  <ellipse cx="490" cy="340" rx="90" ry="32" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <path d="M 400,340 Q 490,400 580,340 Z" fill="#F1F5F9"/>
+
+  <!-- House of Deputies Dome (Upright bowl) -->
+  <path d="M 120,340 Q 210,260 300,340 Z" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+
+  <!-- Modernist Glass Building Interior (Polling Station) -->
+  <rect x="0" y="420" width="1600" height="480" fill="url(#floorReflect)"/>
+
+  <!-- Giant Concrete Niemeyer Pillar -->
+  <rect x="710" y="0" width="140" height="520" fill="#E5E7EB" stroke="#D1D5DB" stroke-width="2"/>
+
+  <!-- Floor-to-Ceiling Glass Window Mullions -->
+  <line x1="0" y1="0" x2="0" y2="480" stroke="#94A3B8" stroke-width="8"/>
+  <line x1="620" y1="0" x2="620" y2="480" stroke="#94A3B8" stroke-width="8"/>
+  <line x1="940" y1="0" x2="940" y2="480" stroke="#94A3B8" stroke-width="8"/>
+  <line x1="1340" y1="0" x2="1340" y2="480" stroke="#94A3B8" stroke-width="8"/>
+  <line x1="0" y1="440" x2="1600" y2="440" stroke="#94A3B8" stroke-width="10"/>
+
+  <!-- Electronic Voting Booths (Urnas Eletrônicas) on Right -->
+  <g fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2">
+    <!-- Booth 1 -->
+    <rect x="1230" y="340" width="100" height="150"/>
+    <rect x="1245" y="490" width="70" height="120" fill="#94A3B8"/>
+    <!-- Booth 2 -->
+    <rect x="1440" y="340" width="100" height="150"/>
+    <rect x="1455" y="490" width="70" height="120" fill="#94A3B8"/>
+  </g>
+
+  <!-- Person Voting at Booth -->
+  <rect x="1265" y="380" width="30" height="70" fill="#1E293B"/>
+  <circle cx="1280" cy="365" r="16" fill="#FBBF24"/>
+
+  <!-- Queue of Diverse Voters Leading Forward (Left to Right / Foreground) -->
+  <!-- Voter 1: Foreground Woman (Back view, dark tank top, denim jeans) -->
+  <circle cx="370" cy="500" r="65" fill="#18181B"/>
+  <path d="M 280,590 Q 370,550 460,590 L 480,880 L 260,880 Z" fill="#18181B"/>
+  <path d="M 270,860 L 470,860 L 480,900 L 260,900 Z" fill="#3B82F6"/>
+
+  <!-- Voter 2: Man in Blue Denim Shirt -->
+  <circle cx="560" cy="420" r="48" fill="#E2E8F0"/>
+  <path d="M 480,480 Q 560,450 640,480 L 640,780 L 470,780 Z" fill="#2563EB"/>
+  <rect x="490" y="780" width="60" height="120" fill="#D97706"/>
+  <rect x="560" y="780" width="60" height="120" fill="#D97706"/>
+
+  <!-- Voter 3: Young Man in Grey T-Shirt and Khakis -->
+  <circle cx="770" cy="380" r="42" fill="#18181B"/>
+  <path d="M 700,430 L 840,430 L 840,680 L 700,680 Z" fill="#4B5563"/>
+  <rect x="710" y="680" width="55" height="160" fill="#E5E7EB"/>
+  <rect x="775" y="680" width="55" height="160" fill="#E5E7EB"/>
+
+  <!-- Voter 4: Woman in Terracotta Pants -->
+  <circle cx="910" cy="425" r="35" fill="#18181B"/>
+  <rect x="870" y="470" width="80" height="130" fill="#FFFFFF"/>
+  <rect x="865" y="600" width="90" height="220" fill="#C2410C"/>
+
+  <!-- Voter 5: Man in Yellow Canarinho Jersey -->
+  <circle cx="1020" cy="380" r="32" fill="#F1F5F9"/>
+  <rect x="980" y="420" width="80" height="170" fill="#EAB308"/>
+  <rect x="990" y="590" width="70" height="190" fill="#1E3A8A"/>
+
+  <!-- Editorial Ribbon -->
+  <rect x="40" y="40" width="410" height="48" rx="8" fill="#000000" opacity="0.65"/>
+  <text x="60" y="72" font-family="'Courier New', monospace" font-size="15" font-weight="700" fill="#38BDF8" letter-spacing="2">
+    FIG. 1 · ELECTIONS AT THE PLANALTO
+  </text>
+</svg>

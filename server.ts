@@ -14,9 +14,13 @@ const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT) || 3000;
 const DATA_FILE = path.resolve(__dirname, "data", "persisted_articles.json");
 const AUDIO_CACHE_DIR = path.resolve(__dirname, "data", "audio_cache");
+const UPLOADS_DIR = path.resolve(__dirname, "public", "uploads");
 
 if (!fs.existsSync(AUDIO_CACHE_DIR)) {
   fs.mkdirSync(AUDIO_CACHE_DIR, { recursive: true });
+}
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
 // Helper: Wrap raw 16-bit PCM buffer into standard playable WAV format
@@ -83,7 +87,9 @@ async function startServer() {
   const app = express();
 
   app.use(cors());
-  app.use(express.json({ limit: "15mb" }));
+  app.use(express.json({ limit: "25mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "25mb" }));
+  app.use("/uploads", express.static(UPLOADS_DIR));
 
   // Ensure file is initialized on boot
   loadPersistedArticles();
@@ -161,6 +167,43 @@ async function startServer() {
     }
   });
 
+  // Direct Image Upload for Illustrated Feature Articles
+  app.post("/api/upload", (req: Request, res: Response) => {
+    try {
+      const { data, filename = "image.png" } = req.body;
+      if (!data || typeof data !== "string") {
+        return res.status(400).json({ success: false, message: "Image base64 data is required" });
+      }
+
+      // Extract base64 payload if dataURL
+      let base64Data = data;
+      let ext = "png";
+      const match = data.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
+      if (match) {
+        ext = match[1].replace("jpeg", "jpg");
+        base64Data = match[2];
+      } else {
+        const fileExt = path.extname(filename).replace(".", "");
+        if (fileExt) ext = fileExt;
+      }
+
+      const fileBuffer = Buffer.from(base64Data, "base64");
+      const hash = crypto.createHash("md5").update(fileBuffer).digest("hex").slice(0, 12);
+      const cleanBaseName = path.basename(filename, path.extname(filename)).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
+      const finalFileName = `${cleanBaseName}_${hash}.${ext}`;
+      const destPath = path.join(UPLOADS_DIR, finalFileName);
+
+      fs.writeFileSync(destPath, fileBuffer);
+      console.log(`[API] Uploaded image saved to ${destPath} (${fileBuffer.length} bytes)`);
+
+      const publicUrl = `/uploads/${finalFileName}`;
+      return res.json({ success: true, url: publicUrl, filename: finalFileName });
+    } catch (err: any) {
+      console.error("[API] Image upload failed:", err);
+      return res.status(500).json({ success: false, message: err?.message || "Failed to process image upload" });
+    }
+  });
+
   // Dedicated High-Fidelity Neural Speech Synthesis Route
   app.post("/api/speech", async (req: Request, res: Response) => {
     try {
@@ -195,7 +238,7 @@ async function startServer() {
         }
       }
 
-      // Clean input text
+      // Clean input text - DO NOT truncate so the WHOLE story is read
       let cleanText = text
         .split(/###\s*Sources/i)[0] // Exclude bibliography/sources section from audio
         .replace(/^#{1,6}\s+/gm, "")
@@ -205,21 +248,11 @@ async function startServer() {
         .replace(/\s+/g, " ")
         .trim();
 
-      // For spoken narration, limit each synthesis request to 1,800 characters (~2-3 mins of audio)
-      if (cleanText.length > 1800) {
-        const cutIndex = cleanText.lastIndexOf(".", 1800);
-        if (cutIndex > 500) {
-          cleanText = cleanText.slice(0, cutIndex + 1);
-        } else {
-          cleanText = cleanText.slice(0, 1800);
-        }
-      }
-
       const cacheKey = crypto.createHash("md5").update(`${selectedVoice}:${rate}:${pitch}:${cleanText}`).digest("hex");
       const cachedFilePath = path.join(AUDIO_CACHE_DIR, `${cacheKey}.mp3`);
 
       // If already cached, serve instantaneously
-      if (fs.existsSync(cachedFilePath)) {
+      if (fs.existsSync(cachedFilePath) && fs.statSync(cachedFilePath).size > 10000) {
         return res.json({
           success: true,
           audioUrl: `/api/speech/audio/${cacheKey}`,
@@ -228,21 +261,50 @@ async function startServer() {
         });
       }
 
-      // Synthesize directly in one smooth pass with a generous 90s timeout
-      const tts = new EdgeTTS({
-        voice: selectedVoice,
-        lang: "en-US",
-        outputFormat: "audio-24khz-96kbitrate-mono-mp3",
-        timeout: 90000,
-        rate,
-        pitch
-      });
+      // Chunk full story into natural sentence-level blocks (~2,200 chars each) to prevent WebSocket drops
+      const chunks: string[] = [];
+      let remaining = cleanText;
+      while (remaining.length > 0) {
+        if (remaining.length <= 2500) {
+          chunks.push(remaining);
+          break;
+        }
+        let cut = remaining.lastIndexOf(". ", 2500);
+        if (cut === -1) cut = remaining.lastIndexOf(" ", 2500);
+        if (cut === -1) cut = 2500;
+        chunks.push(remaining.slice(0, cut + 1).trim());
+        remaining = remaining.slice(cut + 1).trim();
+      }
 
-      await tts.ttsPromise(cleanText, cachedFilePath);
+      console.log(`[TTS API] Synthesizing FULL story in ${chunks.length} chunks (${cleanText.length} chars) with voice ${selectedVoice}...`);
 
-      if (!fs.existsSync(cachedFilePath) || fs.statSync(cachedFilePath).size === 0) {
+      const audioBuffers: Buffer[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkTempPath = path.join(AUDIO_CACHE_DIR, `temp_${cacheKey}_${i}.mp3`);
+        const tts = new EdgeTTS({
+          voice: selectedVoice,
+          lang: "en-US",
+          outputFormat: "audio-24khz-96kbitrate-mono-mp3",
+          timeout: 90000,
+          rate,
+          pitch
+        });
+
+        await tts.ttsPromise(chunks[i], chunkTempPath);
+        if (fs.existsSync(chunkTempPath)) {
+          audioBuffers.push(fs.readFileSync(chunkTempPath));
+          try { fs.unlinkSync(chunkTempPath); } catch {}
+        }
+      }
+
+      if (audioBuffers.length === 0) {
         return res.status(500).json({ success: false, message: "No audio generated from synthesis" });
       }
+
+      // Concatenate all chunks into one continuous, full-length audio stream
+      const fullAudio = Buffer.concat(audioBuffers);
+      fs.writeFileSync(cachedFilePath, fullAudio);
+      console.log(`[TTS API] Full story audio generated successfully: ${fullAudio.length} bytes for ${chunks.length} chunks!`);
 
       if (articleId) {
         const voiceKey = (voice === "Fenrir" ? "Christopher" : voice) || "Christopher";

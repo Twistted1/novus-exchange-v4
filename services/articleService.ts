@@ -1,7 +1,7 @@
 import { Article } from "../types";
 import { ARTICLES_DATA } from "../data/articlesData";
 
-const STORAGE_KEY = "novus_exchange_articles_v3";
+const STORAGE_KEY = "novus_exchange_articles_v8";
 const CMS_CONFIG_KEY = "novus_exchange_cms_config_v1";
 
 // Clean any stale or corrupted legacy keys from prior sessions
@@ -9,6 +9,11 @@ try {
   if (typeof window !== "undefined" && window.localStorage) {
     window.localStorage.removeItem("novus_exchange_articles_override_v1");
     window.localStorage.removeItem("novus_exchange_articles_override_v2");
+    window.localStorage.removeItem("novus_exchange_articles_v3");
+    window.localStorage.removeItem("novus_exchange_articles_v4");
+    window.localStorage.removeItem("novus_exchange_articles_v5");
+    window.localStorage.removeItem("novus_exchange_articles_v6");
+    window.localStorage.removeItem("novus_exchange_articles_v7");
   }
 } catch {
   // Ignore storage access restrictions
@@ -53,7 +58,12 @@ export class ArticleService {
       readTime: typeof raw.readTime === "number" ? raw.readTime : (typeof raw.read_time === "number" ? raw.read_time : fallback.readTime),
       tags: Array.isArray(raw.tags) ? raw.tags : fallback.tags,
       author,
-      featured: typeof raw.featured === "boolean" ? raw.featured : false
+      featured: typeof raw.featured === "boolean" ? raw.featured : false,
+      subtitle: typeof raw.subtitle === "string" ? raw.subtitle : undefined,
+      isIllustratedFeature: typeof raw.isIllustratedFeature === "boolean" ? raw.isIllustratedFeature : false,
+      figures: Array.isArray(raw.figures) ? raw.figures : undefined,
+      keyMetrics: Array.isArray(raw.keyMetrics) ? raw.keyMetrics : undefined,
+      pullQuotes: Array.isArray(raw.pullQuotes) ? raw.pullQuotes : undefined
     };
   }
 
@@ -312,6 +322,44 @@ export class ArticleService {
       return { success: true, message: `Article #${article.id} successfully synced to Supabase table '${config.tableName}'.` };
     } catch (err: any) {
       return { success: false, message: `Network error: ${err.message}` };
+    }
+  }
+
+  /**
+   * Upload an image file directly to the backend /api/upload endpoint
+   */
+  static async uploadImage(file: File): Promise<{ success: boolean; url?: string; error?: string }> {
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          data: base64,
+          filename: file.name
+        })
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Upload failed with status ${res.status}: ${errText}`);
+      }
+
+      const json = await res.json();
+      if (!json.success || !json.url) {
+        throw new Error(json.message || "Failed to save uploaded image.");
+      }
+
+      return { success: true, url: json.url };
+    } catch (e: any) {
+      console.error("[ArticleService] Upload error:", e);
+      return { success: false, error: e.message || "Failed to upload image" };
     }
   }
 }

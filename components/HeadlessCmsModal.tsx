@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Article, ArticleCategory, SigningAuthorType } from "../types";
+import { Article, ArticleCategory, SigningAuthorType, ArticleFigure } from "../types";
 import { ArticleService, SupabaseCmsConfig } from "../services/articleService";
 import { AUTHORS } from "../data/articlesData";
 import { 
@@ -16,7 +16,11 @@ import {
   Check,
   Download,
   Server,
-  CheckCircle2
+  CheckCircle2,
+  Sparkles,
+  Camera,
+  BarChart3,
+  Quote
 } from "lucide-react";
 
 interface CmsModalProps {
@@ -41,6 +45,42 @@ export default function HeadlessCmsModal({
   const [copiedType, setCopiedType] = useState<"json" | "ts" | null>(null);
   const [importJsonText, setImportJsonText] = useState("");
   const [serverStatus, setServerStatus] = useState<{ online: boolean; count: number } | null>(null);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [uploadingFigureIdx, setUploadingFigureIdx] = useState<number | null>(null);
+
+  const uploadImageFile = async (file: File): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const res = await fetch("/api/upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              data: reader.result,
+              filename: file.name
+            })
+          });
+          const json = await res.json();
+          if (json.success && json.url) {
+            showStatus(`Image "${file.name}" uploaded successfully!`, "success");
+            resolve(json.url);
+          } else {
+            showStatus(json.message || "Upload failed", "error");
+            resolve(null);
+          }
+        } catch (e: any) {
+          showStatus("Upload failed: " + e.message, "error");
+          resolve(null);
+        }
+      };
+      reader.onerror = () => {
+        showStatus("Could not read local file", "error");
+        resolve(null);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
 
   useEffect(() => {
     setCmsConfig(ArticleService.getCmsConfig());
@@ -213,16 +253,22 @@ export default function HeadlessCmsModal({
     const nextId = articles.length > 0 ? Math.max(...articles.map((a) => a.id)) + 1 : 1;
     const newArt: Article = {
       id: nextId,
-      category: "Tech-AI",
+      category: "Brazil",
       title: "New Investigation Dossier",
+      subtitle: "Comprehensive investigative field assessment and sovereign telemetry.",
       excerpt: "Executive overview of the freshly conducted investigative reporting.",
-      content: "### SECTION I: INVESTIGATIVE SYNOPSIS\n\nProvide the complete investigative dispatch here...",
+      content: "### EXECUTIVE BRIEFING: STRATEGIC RECONNAISSANCE\n\nProvide the opening investigative briefing here...\n\n---\n\n### CHAPTER I: THE ANATOMY OF SYSTEMIC TRANSFORMATION\n\nDetail the foundational dynamics and telemetry here...\n\n---\n\n### SOURCES AND METHODOLOGY\n\nDocumentary references and technical field dispatches.",
       wordCount: 15,
       imageUrl: "https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?auto=format&fit=crop&w=1200&q=80",
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      readTime: 6,
-      tags: ["Investigation", "Telemetry"],
-      author: AUTHORS["Novus AI"]
+      readTime: 8,
+      tags: ["Investigation", "Brazil", "Macroeconomics"],
+      author: AUTHORS["Marcio"],
+      featured: false,
+      isIllustratedFeature: true,
+      figures: [],
+      keyMetrics: [],
+      pullQuotes: []
     };
     setEditingArticle(newArt);
   };
@@ -398,10 +444,16 @@ export default function HeadlessCmsModal({
                         className="w-16 h-12 object-cover rounded-lg border border-white/10 shrink-0"
                       />
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#A36E3C]/20 text-[#DEAE78] font-bold uppercase">
                             {art.category}
                           </span>
+                          {(art.isIllustratedFeature || (art.figures && art.figures.length > 0)) && (
+                            <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold flex items-center gap-1">
+                              <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                              <span>Illustrated ({art.figures?.length || 0} Figs)</span>
+                            </span>
+                          )}
                           <span className="text-xs font-bold text-white font-editorial line-clamp-1">
                             #{art.id} {art.title}
                           </span>
@@ -483,32 +535,63 @@ export default function HeadlessCmsModal({
                     onChange={(e) => setEditingArticle({ ...editingArticle, category: e.target.value as ArticleCategory })}
                     className="w-full bg-[#05070A] border border-white/15 rounded-lg px-3 py-2 text-white text-xs focus:border-[#A36E3C] outline-none font-mono"
                   >
+                    <option value="Brazil">Brazil</option>
                     <option value="Geopolitics">Geopolitics</option>
                     <option value="Economics">Economics</option>
                     <option value="Tech-AI">Tech-AI</option>
                     <option value="Green-Tech">Green-Tech</option>
                     <option value="CSR">CSR</option>
-                    <option value="Brazil">Brazil</option>
                   </select>
                 </div>
               </div>
 
+              <div>
+                <label className="text-xs font-mono text-[#A1A5AB] block mb-1">Investigative Subtitle / Deck</label>
+                <input
+                  type="text"
+                  value={editingArticle.subtitle || ""}
+                  onChange={(e) => setEditingArticle({ ...editingArticle, subtitle: e.target.value })}
+                  placeholder="Secondary deck explaining the core intelligence thesis or field findings..."
+                  className="w-full bg-[#05070A] border border-white/15 rounded-lg px-3 py-2 text-white text-xs focus:border-[#A36E3C] outline-none"
+                />
+              </div>
+
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-mono text-[#A1A5AB] block mb-1">Photo / Image URL</label>
-                  <div className="flex gap-2">
+                  <label className="text-xs font-mono text-[#A1A5AB] block mb-1">Cover Photo / Lead Artwork</label>
+                  <div className="flex gap-2 items-center">
                     <input
-                      type="url"
+                      type="text"
                       required
                       value={editingArticle.imageUrl}
                       onChange={(e) => setEditingArticle({ ...editingArticle, imageUrl: e.target.value })}
-                      placeholder="https://images.unsplash.com/..."
+                      placeholder="/images/brazil/... or https://..."
                       className="w-full bg-[#05070A] border border-white/15 rounded-lg px-3 py-2 text-white text-xs focus:border-[#A36E3C] outline-none"
                     />
+                    <label className="px-3 py-2 rounded-lg bg-[#A36E3C]/20 hover:bg-[#A36E3C]/30 border border-[#A36E3C]/40 text-xs font-mono text-[#DEAE78] hover:text-white flex items-center gap-1.5 cursor-pointer shrink-0 transition-all">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{isUploadingCover ? "..." : "Upload"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={isUploadingCover}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setIsUploadingCover(true);
+                          const url = await uploadImageFile(file);
+                          if (url) {
+                            setEditingArticle(prev => prev ? { ...prev, imageUrl: url } : null);
+                          }
+                          setIsUploadingCover(false);
+                        }}
+                      />
+                    </label>
                     {editingArticle.imageUrl && (
                       <img
                         src={editingArticle.imageUrl}
-                        alt="Preview"
+                        alt="Cover Preview"
                         className="w-10 h-9 rounded object-cover border border-white/10 shrink-0"
                       />
                     )}
@@ -525,11 +608,390 @@ export default function HeadlessCmsModal({
                     }}
                     className="w-full bg-[#05070A] border border-white/15 rounded-lg px-3 py-2 text-white text-xs focus:border-[#A36E3C] outline-none font-mono"
                   >
+                    <option value="Marcio">Marcio (Marcio Novus - Chief Investigative Editor & Field Envoy)</option>
                     <option value="Novus AI">Novus AI (Novus Intelligence AI)</option>
-                    <option value="Marcio">Marcio (Marcio Novus - Chief Investigative Editor)</option>
                     <option value="Guest">Guest (Decentralized Correspondent)</option>
                   </select>
                 </div>
+              </div>
+
+              {/* ILLUSTRATED FEATURE ARTICLE TOGGLE & SUITE */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-[#0C0F17] to-[#07090D] border border-[#DEAE78]/30 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#A36E3C]/20 border border-[#A36E3C]/40 flex items-center justify-center text-[#DEAE78]">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white uppercase font-brand tracking-wider">
+                          ILLUSTRATED FEATURE ARTICLE MODE
+                        </span>
+                        <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                          EDITORIAL &amp; PHOTO JOURNALISM
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#A1A5AB] font-sans">
+                        Enables museum-grade photo embeds, key economic metrics, pull quotes, and responsive image lightboxes.
+                      </p>
+                    </div>
+                  </div>
+
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!editingArticle.isIllustratedFeature}
+                      onChange={(e) => setEditingArticle({ ...editingArticle, isIllustratedFeature: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#A36E3C]"></div>
+                  </label>
+                </div>
+
+                {editingArticle.isIllustratedFeature && (
+                  <div className="space-y-5 pt-3 border-t border-white/10 text-left">
+                    {/* Figures Section */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Camera className="w-4 h-4 text-[#DEAE78]" />
+                          <span className="text-xs font-bold text-white font-mono uppercase">
+                            Photo Figures &amp; Field Reconnaissance Assets ({editingArticle.figures?.length || 0})
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentFigs = editingArticle.figures || [];
+                            const newFig: ArticleFigure = {
+                              id: `fig-${Date.now()}`,
+                              url: "",
+                              figureNumber: `FIGURE ${(currentFigs.length + 1)}.0`,
+                              chapterIndex: currentFigs.length,
+                              caption: "",
+                              credit: "Novus Field Reconnaissance // Brasília Bureau",
+                              alt: ""
+                            };
+                            setEditingArticle({ ...editingArticle, figures: [...currentFigs, newFig] });
+                          }}
+                          className="px-2.5 py-1 rounded bg-[#A36E3C]/20 hover:bg-[#A36E3C]/30 border border-[#A36E3C]/40 text-[11px] font-mono text-[#DEAE78] hover:text-white flex items-center gap-1 transition-all cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Add Photo Figure</span>
+                        </button>
+                      </div>
+
+                      {(!editingArticle.figures || editingArticle.figures.length === 0) ? (
+                        <p className="text-[11px] text-[#A1A5AB] font-mono bg-[#05070A] p-3 rounded-lg border border-dashed border-white/10">
+                          No extra photo figures attached yet. Click "Add Photo Figure" to embed documentary photographs or diagrams with captions and archival credits.
+                        </p>
+                      ) : (
+                        <div className="grid gap-3">
+                          {editingArticle.figures.map((fig, fIdx) => (
+                            <div key={fig.id || fIdx} className="p-3 bg-[#05070A] rounded-xl border border-white/10 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#A36E3C]/20 text-[#DEAE78] font-bold">
+                                    {fig.figureNumber || `FIGURE ${fIdx + 1}.0`}
+                                  </span>
+                                  <span className="text-xs font-mono text-[#A1A5AB]">
+                                    Assigned to Chapter:
+                                  </span>
+                                  <select
+                                    value={fig.chapterIndex ?? fIdx}
+                                    onChange={(e) => {
+                                      const updated = [...(editingArticle.figures || [])];
+                                      updated[fIdx] = { ...updated[fIdx], chapterIndex: Number(e.target.value) };
+                                      setEditingArticle({ ...editingArticle, figures: updated });
+                                    }}
+                                    className="bg-[#090D14] border border-white/15 rounded px-2 py-0.5 text-white text-[11px] font-mono"
+                                  >
+                                    <option value={0}>Executive Briefing / Opening</option>
+                                    <option value={1}>Chapter I</option>
+                                    <option value={2}>Chapter II</option>
+                                    <option value={3}>Chapter III</option>
+                                    <option value={4}>Chapter IV</option>
+                                    <option value={5}>Chapter V</option>
+                                    <option value={6}>Chapter VI</option>
+                                  </select>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = (editingArticle.figures || []).filter((_, idx) => idx !== fIdx);
+                                    setEditingArticle({ ...editingArticle, figures: updated });
+                                  }}
+                                  className="text-rose-400 hover:text-rose-300 text-xs p-1"
+                                  title="Remove figure"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <div className="grid sm:grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-[10px] font-mono text-[#A1A5AB] block mb-1">Figure Label</label>
+                                  <input
+                                    type="text"
+                                    value={fig.figureNumber || ""}
+                                    onChange={(e) => {
+                                      const updated = [...(editingArticle.figures || [])];
+                                      updated[fIdx] = { ...updated[fIdx], figureNumber: e.target.value };
+                                      setEditingArticle({ ...editingArticle, figures: updated });
+                                    }}
+                                    placeholder="FIGURE 1.0 or MAP 2A"
+                                    className="w-full bg-[#090D14] border border-white/15 rounded px-2.5 py-1.5 text-white text-xs font-mono"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="text-[10px] font-mono text-[#A1A5AB] block mb-1">Archival Credit / Source</label>
+                                  <input
+                                    type="text"
+                                    value={fig.credit || ""}
+                                    onChange={(e) => {
+                                      const updated = [...(editingArticle.figures || [])];
+                                      updated[fIdx] = { ...updated[fIdx], credit: e.target.value };
+                                      setEditingArticle({ ...editingArticle, figures: updated });
+                                    }}
+                                    placeholder="Agência Novus // Brasília Bureau"
+                                    className="w-full bg-[#090D14] border border-white/15 rounded px-2.5 py-1.5 text-white text-xs font-mono"
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="text-[10px] font-mono text-[#A1A5AB] block mb-1">Image URL &amp; Direct Upload</label>
+                                <div className="flex gap-2 items-center">
+                                  <input
+                                    type="text"
+                                    value={fig.url}
+                                    onChange={(e) => {
+                                      const updated = [...(editingArticle.figures || [])];
+                                      updated[fIdx] = { ...updated[fIdx], url: e.target.value };
+                                      setEditingArticle({ ...editingArticle, figures: updated });
+                                    }}
+                                    placeholder="/images/brazil/... or https://..."
+                                    className="w-full bg-[#090D14] border border-white/15 rounded px-2.5 py-1.5 text-white text-xs font-mono"
+                                  />
+                                  <label className="px-3 py-1.5 rounded bg-white/5 hover:bg-white/10 border border-white/15 text-[11px] font-mono text-[#DEAE78] hover:text-white flex items-center gap-1 cursor-pointer shrink-0 transition-all">
+                                    <Upload className="w-3 h-3" />
+                                    <span>{uploadingFigureIdx === fIdx ? "..." : "Upload File"}</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      disabled={uploadingFigureIdx === fIdx}
+                                      onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        setUploadingFigureIdx(fIdx);
+                                        const url = await uploadImageFile(file);
+                                        if (url) {
+                                          const updated = [...(editingArticle.figures || [])];
+                                          updated[fIdx] = { ...updated[fIdx], url };
+                                          setEditingArticle(prev => prev ? { ...prev, figures: updated } : null);
+                                        }
+                                        setUploadingFigureIdx(null);
+                                      }}
+                                    />
+                                  </label>
+                                  {fig.url && (
+                                    <img
+                                      src={fig.url}
+                                      alt="Thumbnail"
+                                      className="w-8 h-8 rounded object-cover border border-white/10 shrink-0"
+                                    />
+                                  )}
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="text-[10px] font-mono text-[#A1A5AB] block mb-1">Journalistic Caption</label>
+                                <textarea
+                                  rows={2}
+                                  value={fig.caption}
+                                  onChange={(e) => {
+                                    const updated = [...(editingArticle.figures || [])];
+                                    updated[fIdx] = { ...updated[fIdx], caption: e.target.value };
+                                    setEditingArticle({ ...editingArticle, figures: updated });
+                                  }}
+                                  placeholder="Detailed caption describing the context, subjects, and geopolitical implications..."
+                                  className="w-full bg-[#090D14] border border-white/15 rounded p-2 text-white text-xs focus:border-[#A36E3C] outline-none"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Key Metrics Section */}
+                    <div className="space-y-3 pt-3 border-t border-white/10">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <BarChart3 className="w-4 h-4 text-emerald-400" />
+                          <span className="text-xs font-bold text-white font-mono uppercase">
+                            Key Economic &amp; Field Metrics ({editingArticle.keyMetrics?.length || 0})
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentMetrics = editingArticle.keyMetrics || [];
+                            setEditingArticle({
+                              ...editingArticle,
+                              keyMetrics: [
+                                ...currentMetrics,
+                                { label: "Indicator Name", value: "R$ 0.0B", context: "Context note" }
+                              ]
+                            });
+                          }}
+                          className="px-2.5 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-[11px] font-mono text-emerald-300 hover:text-white flex items-center gap-1 transition-all cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Add Metric</span>
+                        </button>
+                      </div>
+
+                      {editingArticle.keyMetrics && editingArticle.keyMetrics.length > 0 && (
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          {editingArticle.keyMetrics.map((met, mIdx) => (
+                            <div key={mIdx} className="p-3 bg-[#05070A] rounded-xl border border-white/10 space-y-2 relative">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = (editingArticle.keyMetrics || []).filter((_, idx) => idx !== mIdx);
+                                  setEditingArticle({ ...editingArticle, keyMetrics: updated });
+                                }}
+                                className="absolute top-2 right-2 text-rose-400 hover:text-rose-300"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                              <div>
+                                <label className="text-[10px] font-mono text-[#A1A5AB] block mb-1">Metric Value (Headline)</label>
+                                <input
+                                  type="text"
+                                  value={met.value}
+                                  onChange={(e) => {
+                                    const updated = [...(editingArticle.keyMetrics || [])];
+                                    updated[mIdx] = { ...updated[mIdx], value: e.target.value };
+                                    setEditingArticle({ ...editingArticle, keyMetrics: updated });
+                                  }}
+                                  placeholder="e.g. R$ 68.2 BILLION"
+                                  className="w-full bg-[#090D14] border border-white/15 rounded px-2 py-1 text-white text-xs font-mono font-bold text-[#DEAE78]"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-mono text-[#A1A5AB] block mb-1">Label</label>
+                                <input
+                                  type="text"
+                                  value={met.label}
+                                  onChange={(e) => {
+                                    const updated = [...(editingArticle.keyMetrics || [])];
+                                    updated[mIdx] = { ...updated[mIdx], label: e.target.value };
+                                    setEditingArticle({ ...editingArticle, keyMetrics: updated });
+                                  }}
+                                  placeholder="e.g. Annual Wagering Drainage"
+                                  className="w-full bg-[#090D14] border border-white/15 rounded px-2 py-1 text-white text-xs font-mono"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-mono text-[#A1A5AB] block mb-1">Context / Source</label>
+                                <input
+                                  type="text"
+                                  value={met.context || ""}
+                                  onChange={(e) => {
+                                    const updated = [...(editingArticle.keyMetrics || [])];
+                                    updated[mIdx] = { ...updated[mIdx], context: e.target.value };
+                                    setEditingArticle({ ...editingArticle, keyMetrics: updated });
+                                  }}
+                                  placeholder="e.g. Central Bank of Brazil 2026 Audit"
+                                  className="w-full bg-[#090D14] border border-white/15 rounded px-2 py-1 text-white text-xs font-mono"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Pull Quotes Section */}
+                    <div className="space-y-3 pt-3 border-t border-white/10">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Quote className="w-4 h-4 text-[#DEAE78]" />
+                          <span className="text-xs font-bold text-white font-mono uppercase">
+                            Editorial Pull Quotes ({editingArticle.pullQuotes?.length || 0})
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentQuotes = editingArticle.pullQuotes || [];
+                            setEditingArticle({
+                              ...editingArticle,
+                              pullQuotes: [
+                                ...currentQuotes,
+                                { quote: "Key statement or quote from an expert or official.", attribution: "Source & Title" }
+                              ]
+                            });
+                          }}
+                          className="px-2.5 py-1 rounded bg-[#A36E3C]/20 hover:bg-[#A36E3C]/30 border border-[#A36E3C]/40 text-[11px] font-mono text-[#DEAE78] hover:text-white flex items-center gap-1 transition-all cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Add Pull Quote</span>
+                        </button>
+                      </div>
+
+                      {editingArticle.pullQuotes && editingArticle.pullQuotes.length > 0 && (
+                        <div className="space-y-3">
+                          {editingArticle.pullQuotes.map((pq, qIdx) => (
+                            <div key={qIdx} className="p-3 bg-[#05070A] rounded-xl border border-white/10 space-y-2 relative">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = (editingArticle.pullQuotes || []).filter((_, idx) => idx !== qIdx);
+                                  setEditingArticle({ ...editingArticle, pullQuotes: updated });
+                                }}
+                                className="absolute top-2 right-2 text-rose-400 hover:text-rose-300"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                              <div>
+                                <label className="text-[10px] font-mono text-[#A1A5AB] block mb-1">Quote Statement</label>
+                                <textarea
+                                  rows={2}
+                                  value={pq.quote}
+                                  onChange={(e) => {
+                                    const updated = [...(editingArticle.pullQuotes || [])];
+                                    updated[qIdx] = { ...updated[qIdx], quote: e.target.value };
+                                    setEditingArticle({ ...editingArticle, pullQuotes: updated });
+                                  }}
+                                  className="w-full bg-[#090D14] border border-white/15 rounded p-2 text-white text-xs font-serif italic"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-mono text-[#A1A5AB] block mb-1">Attribution / Speaker</label>
+                                <input
+                                  type="text"
+                                  value={pq.attribution || ""}
+                                  onChange={(e) => {
+                                    const updated = [...(editingArticle.pullQuotes || [])];
+                                    updated[qIdx] = { ...updated[qIdx], attribution: e.target.value };
+                                    setEditingArticle({ ...editingArticle, pullQuotes: updated });
+                                  }}
+                                  placeholder="e.g. Senior Macroeconomic Advisor, Central Bank of Brazil"
+                                  className="w-full bg-[#090D14] border border-white/15 rounded px-2 py-1 text-white text-xs font-mono"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -544,23 +1006,72 @@ export default function HeadlessCmsModal({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-mono text-[#A1A5AB]">
-                    Full Dossier Body (Markdown format)
-                  </label>
-                  <span className="text-[11px] font-mono text-[#DEAE78]">
-                    Current Word Count: {editingArticle.content.trim().split(/\s+/).filter(Boolean).length} words
-                  </span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-1.5 gap-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-mono text-[#A1A5AB]">
+                      Full Dossier Body (Markdown format)
+                    </label>
+                    <span className="text-[11px] font-mono text-[#DEAE78]">
+                      ({editingArticle.content.trim().split(/\s+/).filter(Boolean).length} words)
+                    </span>
+                  </div>
+
+                  {/* Markdown Helper Toolbar */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const snippet = `\n\n---\n\n### CHAPTER : TITLE HERE\n\n`;
+                        setEditingArticle({ ...editingArticle, content: editingArticle.content + snippet });
+                      }}
+                      className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 border border-white/15 text-[10px] font-mono text-[#DEAE78]"
+                    >
+                      + Chapter
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const snippet = `\n\n---\n\n`;
+                        setEditingArticle({ ...editingArticle, content: editingArticle.content + snippet });
+                      }}
+                      className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 border border-white/15 text-[10px] font-mono text-white/80"
+                    >
+                      + Divider (---)
+                    </button>
+                    {editingArticle.figures && editingArticle.figures.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const fig = editingArticle.figures?.[0];
+                          const snippet = `\n\n![${fig?.caption || "Figure"}](${fig?.url})\n\n`;
+                          setEditingArticle({ ...editingArticle, content: editingArticle.content + snippet });
+                        }}
+                        className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-[10px] font-mono text-amber-300"
+                      >
+                        + Insert Figure Tag
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const snippet = `\n\n> "Notable quote regarding sovereign analysis."\n> — Expert Attribution\n\n`;
+                        setEditingArticle({ ...editingArticle, content: editingArticle.content + snippet });
+                      }}
+                      className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 border border-white/15 text-[10px] font-mono text-white/80"
+                    >
+                      + Pull Quote
+                    </button>
+                  </div>
                 </div>
                 <textarea
-                  rows={10}
+                  rows={12}
                   required
                   value={editingArticle.content}
                   onChange={(e) => setEditingArticle({ ...editingArticle, content: e.target.value })}
                   className="w-full bg-[#05070A] border border-white/15 rounded-lg p-3 text-[#D4D7DC] text-xs font-mono focus:border-[#A36E3C] outline-none leading-relaxed"
                 />
                 <p className="text-[10px] text-[#A1A5AB] mt-1 font-mono">
-                  Separate chapters with "---" and markdown headers ("### CHAPTER I: ...") to maintain the editorial presentation.
+                  Separate chapters with "---" and markdown headers ("### CHAPTER I: ...") to maintain the editorial presentation. Figures assigned to chapters are automatically rendered in museum frames.
                 </p>
               </div>
 
@@ -568,15 +1079,16 @@ export default function HeadlessCmsModal({
                 <button
                   type="button"
                   onClick={() => setEditingArticle(null)}
-                  className="px-4 py-2 rounded-lg border border-white/10 text-xs font-mono text-[#A1A5AB] hover:text-white"
+                  className="px-4 py-2 rounded-lg border border-white/10 text-xs font-mono text-[#A1A5AB] hover:text-white cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-[#A36E3C] hover:bg-[#DEAE78] text-white font-bold text-xs font-mono transition-all shadow"
+                  className="px-5 py-2 rounded-lg bg-[#A36E3C] hover:bg-[#DEAE78] text-white font-bold text-xs font-mono transition-all shadow cursor-pointer flex items-center gap-1.5"
                 >
-                  Save Article & Update Feed
+                  <Check className="w-4 h-4" />
+                  <span>Save Article &amp; Update Live Feed</span>
                 </button>
               </div>
             </form>

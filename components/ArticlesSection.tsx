@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Article, Category, SigningAuthorType } from "../types";
+import { Article, Category, SigningAuthorType, ArticleFigure } from "../types";
 import { ARTICLES_DATA, AUTHORS } from "../data/articlesData";
 import { ArticleService } from "../services/articleService";
 import HeadlessCmsModal from "./HeadlessCmsModal";
@@ -19,7 +19,12 @@ import {
   Database,
   RotateCcw,
   Volume2,
-  Play
+  Play,
+  Sparkles,
+  Camera,
+  BarChart3,
+  Quote,
+  ZoomIn
 } from "lucide-react";
 
 export default function ArticlesSection() {
@@ -31,6 +36,7 @@ export default function ArticlesSection() {
   const [overrideAuthors, setOverrideAuthors] = useState<Record<number, SigningAuthorType>>({});
   const [isCmsOpen, setIsCmsOpen] = useState<boolean>(false);
   const [isResettingArticles, setIsResettingArticles] = useState<boolean>(false);
+  const [lightboxFigure, setLightboxFigure] = useState<ArticleFigure | null>(null);
   const isResettingRef = useRef(false);
 
   // Load articles from Supabase / Local CMS / Bundled Data
@@ -77,15 +83,16 @@ export default function ArticlesSection() {
     return () => window.removeEventListener("novus_articles_updated", handleUpdate);
   }, []);
 
-  // Categories requested: Tech-AI - Green-Tech - CSR - Brazil + any custom categories added via CMS
-  const baseCategories: ("All" | Category | string)[] = [
+  // Categories requested: Tech-AI - Green-Tech - CSR - Brazil + Illustrated Features
+  const baseCategories: ("All" | "Illustrated Features" | Category | string)[] = [
     "All",
+    "Illustrated Features",
+    "Brazil",
     "Geopolitics",
     "Economics",
     "Tech-AI",
     "Green-Tech",
-    "CSR",
-    "Brazil"
+    "CSR"
   ];
 
   // Dynamically include any custom categories created in CMS
@@ -117,7 +124,9 @@ export default function ArticlesSection() {
     const currentAuthor = getArticleAuthor(article);
     const categoryMatches =
       selectedCategory === "All" ||
-      article.category.toLowerCase().trim() === selectedCategory.toLowerCase().trim();
+      (selectedCategory === "Illustrated Features"
+        ? (article.isIllustratedFeature || (article.figures && article.figures.length > 0))
+        : article.category.toLowerCase().trim() === selectedCategory.toLowerCase().trim());
     const authorMatches =
       selectedAuthor === "All" ||
       (currentAuthor.role && currentAuthor.role.toLowerCase() === selectedAuthor.toLowerCase()) ||
@@ -288,11 +297,17 @@ export default function ArticlesSection() {
                       {/* Gradient overlay for depth */}
                       <div className="absolute inset-0 bg-gradient-to-t from-[#07090D] via-transparent to-transparent opacity-70 pointer-events-none" />
 
-                      {/* Top Badges: Category & Word Count */}
-                      <div className="absolute top-3 left-3 flex items-center gap-2">
+                      {/* Top Badges: Category, Illustrated Feature & Word Count */}
+                      <div className="absolute top-3 left-3 flex items-center gap-1.5 flex-wrap">
                         <div className="px-2 py-0.5 bg-[#040507]/90 border border-[#A36E3C]/40 backdrop-blur-sm rounded text-[9px] font-mono text-[#DEAE78] font-bold uppercase tracking-wider">
                           {article.category}
                         </div>
+                        {(article.isIllustratedFeature || (article.figures && article.figures.length > 0)) && (
+                          <div className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/40 backdrop-blur-sm rounded text-[9px] font-mono text-amber-300 font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm">
+                            <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                            <span>ILLUSTRATED ({article.figures?.length || 5} FIGS)</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="absolute top-3 right-3 px-2 py-0.5 bg-[#040507]/90 border border-white/20 backdrop-blur-sm rounded text-[9px] font-mono text-[#D4D7DC] font-semibold flex items-center gap-1">
@@ -417,19 +432,34 @@ export default function ArticlesSection() {
               
               {/* Category, Word Count & Title */}
               <div>
-                <div className="flex items-center gap-2.5 mb-2">
+                <div className="flex items-center gap-2.5 mb-2 flex-wrap">
                   <span className="text-xs uppercase tracking-widest font-mono text-[#A36E3C] font-bold">
                     {readingArticle.category}
                   </span>
+                  {(readingArticle.isIllustratedFeature || (readingArticle.figures && readingArticle.figures.length > 0)) && (
+                    <>
+                      <span className="text-[#A1A5AB]">·</span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-mono tracking-wider font-bold">
+                        <Sparkles className="w-3 h-3 text-amber-400" />
+                        <span>ILLUSTRATED FEATURE DOSSIER // {readingArticle.figures?.length || 5} FIGURES</span>
+                      </span>
+                    </>
+                  )}
                   <span className="text-[#A1A5AB]">·</span>
                   <span className="text-xs font-mono text-[#DEAE78] font-bold">
                     {(readingArticle.wordCount ?? 2000).toLocaleString()} WORDS (COMPREHENSIVE INVESTIGATION)
                   </span>
                 </div>
 
-                <h1 className="font-editorial text-2xl sm:text-3xl md:text-4xl font-bold text-white mt-1 mb-4 leading-tight">
+                <h1 className="font-editorial text-2xl sm:text-3xl md:text-4xl font-bold text-white mt-1 mb-2 leading-tight">
                   {readingArticle.title}
                 </h1>
+
+                {readingArticle.subtitle && (
+                  <p className="text-base sm:text-lg text-[#DEAE78] font-editorial italic font-normal leading-relaxed mb-4">
+                    {readingArticle.subtitle}
+                  </p>
+                )}
 
                 {/* Byline and Signing Author Switcher Bar */}
                 {(() => {
@@ -486,7 +516,7 @@ export default function ArticlesSection() {
                 })()}
 
                 {/* Audio Narration Bar in Reader */}
-                <div className="my-2 p-3.5 rounded-xl border border-[#A36E3C]/40 bg-[#040507] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[0_0_15px_rgba(163,110,60,0.12)]">
+                <div className="my-3 p-3.5 rounded-xl border border-[#A36E3C]/40 bg-[#040507] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[0_0_15px_rgba(163,110,60,0.12)]">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-lg bg-[#A36E3C]/20 border border-[#A36E3C]/40 flex items-center justify-center text-[#DEAE78] shrink-0">
                       <Volume2 className="w-4 h-4 text-emerald-400" />
@@ -516,57 +546,316 @@ export default function ArticlesSection() {
                 </div>
               </div>
 
-              {/* Artwork presentation */}
-              <div className="aspect-video w-full rounded-xl overflow-hidden border border-[#A36E3C]/20 shadow-inner relative bg-[#040507]">
-                <img
-                  src={readingArticle.imageUrl}
-                  alt={readingArticle.title}
-                  className="w-full h-full object-cover object-center"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#07090D] via-transparent to-transparent opacity-40 pointer-events-none" />
+              {/* Artwork presentation / Cover Figure */}
+              <div>
+                <div 
+                  onClick={() => {
+                    const coverFig = readingArticle.figures?.find(f => f.chapterIndex === 0) || readingArticle.figures?.[0];
+                    if (coverFig) {
+                      setLightboxFigure(coverFig);
+                    } else {
+                      setLightboxFigure({
+                        id: "cover",
+                        url: readingArticle.imageUrl,
+                        caption: readingArticle.excerpt,
+                        figureNumber: "COVER RECONNAISSANCE"
+                      });
+                    }
+                  }}
+                  className="aspect-video w-full rounded-t-xl overflow-hidden border-t border-x border-[#A36E3C]/30 shadow-inner relative bg-[#040507] group cursor-pointer"
+                >
+                  <img
+                    src={readingArticle.imageUrl}
+                    alt={readingArticle.title}
+                    className="w-full h-full object-cover object-center group-hover:scale-[1.01] transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#07090D] via-transparent to-transparent opacity-40 pointer-events-none" />
+                  <div className="absolute top-3 right-3 px-2 py-1 bg-black/70 backdrop-blur-md rounded border border-white/20 text-[10px] font-mono text-white/90 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ZoomIn className="w-3 h-3 text-[#DEAE78]" />
+                    <span>Click to Inspect Full Resolution</span>
+                  </div>
+                </div>
+
+                {/* Cover Figure Caption & Archival Credit */}
+                {(() => {
+                  const coverFig = readingArticle.figures?.find(f => f.chapterIndex === 0) || readingArticle.figures?.[0];
+                  if (coverFig && coverFig.caption) {
+                    return (
+                      <div className="bg-[#05070A] border-x border-b border-[#A36E3C]/30 p-3.5 rounded-b-xl text-left space-y-1 shadow-md">
+                        <div className="flex items-center justify-between text-[10px] font-mono text-[#DEAE78]">
+                          <span className="font-bold flex items-center gap-1.5">
+                            <Camera className="w-3.5 h-3.5" />
+                            {coverFig.figureNumber || "FIGURE 1.0"}
+                          </span>
+                          {coverFig.credit && (
+                            <span className="text-[#A1A5AB]">
+                              SOURCE: <span className="text-[#DEAE78]">{coverFig.credit}</span>
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-[#D4D7DC] font-sans leading-relaxed">
+                          {coverFig.caption}
+                        </p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="bg-[#05070A] border-x border-b border-[#A36E3C]/30 p-2.5 rounded-b-xl text-left text-[11px] font-mono text-[#A1A5AB]">
+                      FIGURE 1.0 // {readingArticle.title}
+                    </div>
+                  );
+                })()}
               </div>
+
+              {/* Key Macroeconomic Indicators Banner */}
+              {readingArticle.keyMetrics && readingArticle.keyMetrics.length > 0 && (
+                <div className="my-6 p-4 rounded-xl bg-gradient-to-br from-[#090D14] via-[#05070A] to-[#0D111A] border border-[#DEAE78]/30 shadow-xl text-left">
+                  <div className="flex items-center gap-2 mb-3 text-xs font-mono font-bold text-[#DEAE78] uppercase tracking-wider">
+                    <BarChart3 className="w-4 h-4 text-emerald-400" />
+                    <span>Key Macroeconomic &amp; Telemetry Indicators</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {readingArticle.keyMetrics.map((met, idx) => (
+                      <div key={idx} className="p-3.5 bg-[#040507]/90 rounded-lg border border-white/10 hover:border-[#A36E3C]/40 transition-colors">
+                        <div className="text-lg sm:text-xl font-brand font-bold text-[#DEAE78] tracking-wide">
+                          {met.value}
+                        </div>
+                        <div className="text-[11px] font-mono font-bold text-white mt-0.5">
+                          {met.label}
+                        </div>
+                        {met.context && (
+                          <div className="text-[10px] text-[#A1A5AB] font-mono mt-1 leading-snug">
+                            {met.context}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Full Article Content */}
               <div className="max-w-3xl mx-auto space-y-6 text-left pt-4">
-                {readingArticle.content.split(/\n\s*---\s*\n/).map((section, sIdx) => {
-                  const paragraphs = section.split(/\n\n+/);
-                  return (
-                    <div key={sIdx} className="space-y-4 border-b border-white/5 pb-8 last:border-b-0">
-                      {paragraphs.map((para, pIdx) => {
-                        const trimmed = para.trim();
-                        if (!trimmed) return null;
-                        if (trimmed.startsWith("### ")) {
+                {readingArticle.content
+                  .split(/\n\s*---\s*\n|\n(?=(?:Chapter \d+|Prologue:|Epilogue:|EXECUTIVE BRIEFING:))/i)
+                  .map((section, sIdx) => {
+                    const paragraphs = section.split(/\n\n+/);
+                    
+                    // Figures assigned specifically to this chapter (sIdx)
+                    const chapterFigures = (readingArticle.figures || []).filter(
+                      (f) => f.chapterIndex === sIdx && f.chapterIndex > 0
+                    );
+
+                    // Pull quote assigned to this chapter index
+                    const pullQuote = readingArticle.pullQuotes && readingArticle.pullQuotes[sIdx - 1];
+
+                    // Helper to clean any markdown formatting dirt
+                    const stripMd = (str: string) =>
+                      str
+                        .replace(/^#{1,6}\s+/, "")
+                        .replace(/\*\*(.*?)\*\*/g, "$1")
+                        .replace(/\*(.*?)\*/g, "$1")
+                        .replace(/__(.*?)__/g, "$1")
+                        .replace(/_(.*?)_/g, "$1")
+                        .replace(/---\s*/g, " ")
+                        .trim();
+
+                    return (
+                      <div key={sIdx} className="space-y-4 border-b border-white/5 pb-8 last:border-b-0">
+                        {paragraphs.map((para, pIdx) => {
+                          const trimmed = para.trim();
+                          if (!trimmed) return null;
+
+                          // Editor's Note Banner
+                          if (/^Editor['’]s\s*note:/i.test(trimmed)) {
+                            return (
+                              <div
+                                key={pIdx}
+                                className="p-4 rounded-xl border border-[#DEAE78]/30 bg-[#DEAE78]/5 backdrop-blur-sm text-left my-4 space-y-1"
+                              >
+                                <div className="text-[10px] font-mono text-[#DEAE78] uppercase tracking-wider font-bold">
+                                  Editorial Note & Verification Context
+                                </div>
+                                <p className="text-xs sm:text-sm text-[#D4D7DC] italic font-sans leading-relaxed">
+                                  {stripMd(trimmed)}
+                                </p>
+                              </div>
+                            );
+                          }
+
+                          // Primary Chapter Headings
+                          const isChapterHeader =
+                            /^#{1,3}\s+/.test(trimmed) ||
+                            /^(Chapter \d+|Prologue:|Epilogue:|EXECUTIVE BRIEFING:)/i.test(trimmed);
+
+                          if (isChapterHeader) {
+                            return (
+                              <h3
+                                key={pIdx}
+                                className="font-brand text-xl sm:text-2xl font-bold text-[#DEAE78] pt-4 tracking-wide border-l-4 border-[#C92A35] pl-3.5 mt-6 mb-2"
+                              >
+                                {stripMd(trimmed)}
+                              </h3>
+                            );
+                          }
+
+                          // Secondary Section Subheadings
+                          const isSubheader =
+                            /^#{4,6}\s+/.test(trimmed) ||
+                            (!trimmed.includes(".") &&
+                              trimmed.length < 90 &&
+                              pIdx > 0 &&
+                              !trimmed.startsWith("-") &&
+                              !trimmed.startsWith("•") &&
+                              !/^\d+\./.test(trimmed)) ||
+                            /^(A dead heat|The platforms|The backdrop|From prohibition|The human cost|The marketing machine|The mechanics|The lawsuit|The politics|The numbers|The Central Bank|The human stories|US interference|The oil crisis|The AI and critical|Scenario \d+|The bottom line|Sources &|Key reporting)/i.test(
+                              trimmed
+                            );
+
+                          if (isSubheader && trimmed.length < 110) {
+                            return (
+                              <h4
+                                key={pIdx}
+                                className="font-brand text-base sm:text-lg font-bold text-white pt-3 pb-0.5 tracking-normal text-left"
+                              >
+                                {stripMd(trimmed)}
+                              </h4>
+                            );
+                          }
+
+                          // Lists & Bullets
+                          if (
+                            trimmed.startsWith("- ") ||
+                            trimmed.startsWith("• ") ||
+                            trimmed.startsWith("* ") ||
+                            /^\d+\.\s/.test(trimmed)
+                          ) {
+                            return (
+                              <div
+                                key={pIdx}
+                                className="pl-4 border-l-2 border-[#A36E3C]/40 font-sans text-sm text-[#D4D7DC] space-y-2 my-3 bg-[#080A0E]/50 p-3.5 rounded-r-lg"
+                              >
+                                {trimmed.split("\n").map((line, lIdx) => {
+                                  const cleanLine = stripMd(line.replace(/^[-*•]\s+/, "").replace(/^\d+\.\s+/, ""));
+                                  return (
+                                    <div key={lIdx} className="flex items-start gap-2.5 leading-relaxed">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-[#DEAE78] mt-2 shrink-0" />
+                                      <span>{cleanLine}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          }
+
+                          // Markdown Image Embed ![Alt](url)
+                          const imgMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
+                          if (imgMatch) {
+                            const altText = imgMatch[1];
+                            const imgUrl = imgMatch[2];
+                            return (
+                              <figure
+                                key={pIdx}
+                                onClick={() => setLightboxFigure({
+                                  id: `inline-${pIdx}`,
+                                  url: imgUrl,
+                                  caption: altText,
+                                  figureNumber: `FIGURE ${sIdx}.${pIdx + 1}`
+                                })}
+                                className="my-5 rounded-xl overflow-hidden border border-[#A36E3C]/30 bg-[#05070A] shadow-xl group cursor-pointer hover:border-[#DEAE78] transition-all"
+                              >
+                                <div className="aspect-[16/9] w-full overflow-hidden bg-black/60 relative">
+                                  <img
+                                    src={imgUrl}
+                                    alt={altText}
+                                    className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-500"
+                                  />
+                                  <div className="absolute top-2.5 right-2.5 px-2 py-1 bg-black/75 rounded text-[10px] font-mono text-[#DEAE78] flex items-center gap-1">
+                                    <ZoomIn className="w-3 h-3" />
+                                    <span>Inspect</span>
+                                  </div>
+                                </div>
+                                {altText && (
+                                  <figcaption className="p-3 text-xs text-[#D4D7DC] font-sans text-left">
+                                    {altText}
+                                  </figcaption>
+                                )}
+                              </figure>
+                            );
+                          }
+
+                          // Standard Narrative Prose
+                          const cleanPara = stripMd(trimmed);
                           return (
-                            <h3 key={pIdx} className="font-brand text-xl sm:text-2xl font-bold text-white pt-2 tracking-wide text-[#DEAE78] border-l-2 border-[#C92A35] pl-3">
-                              {trimmed.replace("### ", "")}
-                            </h3>
+                            <p
+                              key={pIdx}
+                              className={`text-[#D4D7DC] text-sm sm:text-base leading-relaxed font-sans ${
+                                sIdx === 0 && pIdx === 1
+                                  ? "first-letter:text-5xl first-letter:font-editorial first-letter:font-bold first-letter:float-left first-letter:mr-3 first-letter:mt-1 first-letter:text-[#A36E3C]"
+                                  : ""
+                              }`}
+                            >
+                              {cleanPara}
+                            </p>
                           );
-                        }
-                        if (trimmed.startsWith("- ") || /^\d+\.\s/.test(trimmed)) {
-                          return (
-                            <div key={pIdx} className="pl-4 border-l-2 border-[#A36E3C]/40 font-sans text-sm text-[#D4D7DC] space-y-1.5 my-3 bg-[#080A0E]/50 p-3 rounded-r-lg">
-                              {trimmed.split("\n").map((line, lIdx) => (
-                                <p key={lIdx} className="leading-relaxed">{line}</p>
-                              ))}
-                            </div>
-                          );
-                        }
-                        return (
-                          <p
-                            key={pIdx}
-                            className={`text-[#D4D7DC] text-sm sm:text-base leading-relaxed font-sans ${
-                              sIdx === 0 && pIdx === 0
-                                ? "first-letter:text-5xl first-letter:font-editorial first-letter:font-bold first-letter:float-left first-letter:mr-3 first-letter:mt-1 first-letter:text-[#A36E3C]"
-                                : ""
-                            }`}
+                        })}
+
+                        {/* Embedded Chapter Figures for Illustrated Feature Articles */}
+                        {chapterFigures.map((fig, fIdx) => (
+                          <figure
+                            key={`fig-${sIdx}-${fIdx}`}
+                            onClick={() => setLightboxFigure(fig)}
+                            className="my-6 rounded-xl overflow-hidden border border-[#A36E3C]/30 bg-[#05070A] shadow-xl group cursor-pointer transition-all hover:border-[#DEAE78]"
                           >
-                            {trimmed}
-                          </p>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+                            <div className="px-4 py-2 bg-[#090D14] border-b border-white/10 flex items-center justify-between text-[11px] font-mono">
+                              <div className="flex items-center gap-2 text-[#DEAE78] font-bold">
+                                <Camera className="w-3.5 h-3.5" />
+                                <span>{fig.figureNumber || `FIGURE ${sIdx}.${fIdx + 1}`}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[#A1A5AB] group-hover:text-white transition-colors">
+                                <ZoomIn className="w-3.5 h-3.5 text-[#DEAE78]" />
+                                <span className="text-[10px]">Click to inspect</span>
+                              </div>
+                            </div>
+
+                            <div className="aspect-[16/9] w-full overflow-hidden bg-black/60 relative">
+                              <img
+                                src={fig.url}
+                                alt={fig.caption || fig.figureNumber || "Article Figure"}
+                                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-500"
+                              />
+                            </div>
+
+                            <figcaption className="p-3.5 text-left space-y-1 bg-[#05070A]">
+                              <p className="text-xs sm:text-sm text-[#E2E5EA] font-sans leading-relaxed">
+                                {fig.caption}
+                              </p>
+                              {fig.credit && (
+                                <p className="text-[10px] font-mono text-[#A1A5AB]">
+                                  SOURCE / ARCHIVE: <span className="text-[#DEAE78]">{fig.credit}</span>
+                                </p>
+                              )}
+                            </figcaption>
+                          </figure>
+                        ))}
+
+                        {/* Embedded Editorial Pull Quote */}
+                        {pullQuote && (
+                          <blockquote className="my-6 p-5 rounded-r-xl border-l-4 border-[#C92A35] bg-gradient-to-r from-[#A36E3C]/10 via-[#07090D] to-transparent text-left space-y-2">
+                            <p className="font-editorial text-base sm:text-lg text-white italic leading-relaxed flex items-start gap-2">
+                              <Quote className="w-5 h-5 text-[#DEAE78] shrink-0 mt-1" />
+                              <span>"{pullQuote.quote}"</span>
+                            </p>
+                            {pullQuote.attribution && (
+                              <cite className="block text-[11px] font-mono text-[#DEAE78] not-italic pl-7">
+                                — {pullQuote.attribution}
+                              </cite>
+                            )}
+                          </blockquote>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
 
               {/* Tags */}
@@ -587,6 +876,49 @@ export default function ArticlesSection() {
                 <span>NOVUS EXCHANGE INVESTIGATIVE REPOSITORY // IMMUTABLE RELEASE</span>
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN MUSEUM LIGHTBOX FOR HIGH-RES FIGURES */}
+      {lightboxFigure && (
+        <div
+          onClick={() => setLightboxFigure(null)}
+          className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 sm:p-8 animate-fadeIn"
+        >
+          <button
+            onClick={() => setLightboxFigure(null)}
+            className="absolute top-5 right-5 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+            title="Close Lightbox (Esc)"
+          >
+            <X className="w-6 h-6" />
+          </button>
+
+          <div onClick={(e) => e.stopPropagation()} className="max-w-5xl max-h-[90vh] flex flex-col items-center text-left">
+            <div className="overflow-hidden rounded-xl border border-white/20 shadow-2xl bg-black max-h-[72vh] flex items-center justify-center">
+              <img
+                src={lightboxFigure.url}
+                alt={lightboxFigure.caption || "Inspection Figure"}
+                className="max-h-[72vh] w-auto max-w-full object-contain"
+              />
+            </div>
+
+            <div className="mt-3 p-4 rounded-xl bg-[#090D14]/90 border border-white/10 max-w-3xl w-full space-y-1">
+              <div className="flex items-center justify-between text-xs font-mono text-[#DEAE78]">
+                <span className="font-bold flex items-center gap-1.5">
+                  <Camera className="w-3.5 h-3.5" />
+                  {lightboxFigure.figureNumber || "FIGURE RECONNAISSANCE"}
+                </span>
+                {lightboxFigure.credit && (
+                  <span className="text-[#A1A5AB]">
+                    SOURCE: <span className="text-[#DEAE78]">{lightboxFigure.credit}</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs sm:text-sm text-[#D4D7DC] font-sans leading-relaxed">
+                {lightboxFigure.caption}
+              </p>
             </div>
           </div>
         </div>
