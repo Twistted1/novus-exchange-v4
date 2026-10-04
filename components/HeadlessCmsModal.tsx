@@ -49,6 +49,11 @@ export default function HeadlessCmsModal({
   const [uploadingFigureIdx, setUploadingFigureIdx] = useState<number | null>(null);
 
   const uploadImageFile = async (file: File): Promise<string | null> => {
+    const uploadsEnabled = false as boolean;
+    if (!uploadsEnabled) {
+      setStatusMsg({ text: "Image upload is not available on this deployment. Upload the file to R2 and paste its public URL.", type: "error" });
+      return null;
+    }
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = async () => {
@@ -419,7 +424,7 @@ export default function HeadlessCmsModal({
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>
-                    <strong>Multi-Browser Persistence:</strong> Server API (/api/articles) is active. Articles saved here persist across all browsers, external URLs, and live visitors.
+                    <strong>Public articles</strong> are read from the Supabase <code>articles</code> table for every visitor. Edits made in this panel stay in this browser only.
                   </span>
                 </div>
                 <button
@@ -1280,7 +1285,7 @@ CREATE POLICY "Public articles read" ON articles FOR SELECT USING (true);`}
                   </h4>
                 </div>
                 <p className="text-xs text-[#A1A5AB] leading-relaxed">
-                  Why didn&apos;t added articles show in other browsers previously? In pure static single-page apps, edits save to browser-isolated local storage. With the <strong>Novus Server Engine (/api/articles)</strong> active, your custom dossiers are automatically stored in the server backend and shared across all browser tabs, phones, incognito sessions, and visitors!
+                  Why didn&apos;t added articles show in other browsers previously? In pure static single-page apps, edits save to browser-isolated local storage. Public articles now come from the Supabase <strong>articles</strong> table, shared with every visitor. Anything saved in this panel stays in this browser until it is added to Supabase.
                 </p>
               </div>
 

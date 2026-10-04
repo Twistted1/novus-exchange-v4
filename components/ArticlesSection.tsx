@@ -27,6 +27,9 @@ import {
   ZoomIn
 } from "lucide-react";
 
+const figCount = (a: Article): number =>
+  a.figures?.length || (a.content.match(/^!\[[^\]]*\]\(/gm) || []).length || 5;
+
 export default function ArticlesSection() {
   const [articlesList, setArticlesList] = useState<Article[]>(() => ARTICLES_DATA);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
@@ -305,7 +308,7 @@ export default function ArticlesSection() {
                         {(article.isIllustratedFeature || (article.figures && article.figures.length > 0)) && (
                           <div className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/40 backdrop-blur-sm rounded text-[9px] font-mono text-amber-300 font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm">
                             <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                            <span>ILLUSTRATED ({article.figures?.length || 5} FIGS)</span>
+                            <span>ILLUSTRATED ({figCount(article)} FIGS)</span>
                           </div>
                         )}
                       </div>
@@ -441,7 +444,7 @@ export default function ArticlesSection() {
                       <span className="text-[#A1A5AB]">·</span>
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-mono tracking-wider font-bold">
                         <Sparkles className="w-3 h-3 text-amber-400" />
-                        <span>ILLUSTRATED FEATURE DOSSIER // {readingArticle.figures?.length || 5} FIGURES</span>
+                        <span>ILLUSTRATED FEATURE DOSSIER // {figCount(readingArticle)} FIGURES</span>
                       </span>
                     </>
                   )}
@@ -748,18 +751,20 @@ export default function ArticlesSection() {
                             );
                           }
 
-                          // Markdown Image Embed ![Alt](url)
-                          const imgMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
+                          // Markdown Image Embed: ![Alt](url) or ![Alt](url "caption")
+                          const imgMatch = trimmed.match(/^!\[([^\]]*)\]\((\S+?)(?:\s+"([^"]*)")?\)$/);
                           if (imgMatch) {
                             const altText = imgMatch[1];
                             const imgUrl = imgMatch[2];
+                            const capText = imgMatch[3] || altText;
                             return (
                               <figure
                                 key={pIdx}
                                 onClick={() => setLightboxFigure({
-                                  id: `inline-${pIdx}`,
+                                  id: `inline-${sIdx}-${pIdx}`,
                                   url: imgUrl,
-                                  caption: altText,
+                                  caption: capText,
+                                  alt: altText,
                                   figureNumber: `FIGURE ${sIdx}.${pIdx + 1}`
                                 })}
                                 className="my-5 rounded-xl overflow-hidden border border-[#A36E3C]/30 bg-[#05070A] shadow-xl group cursor-pointer hover:border-[#DEAE78] transition-all"
@@ -768,6 +773,7 @@ export default function ArticlesSection() {
                                   <img
                                     src={imgUrl}
                                     alt={altText}
+                                    loading="lazy"
                                     className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-500"
                                   />
                                   <div className="absolute top-2.5 right-2.5 px-2 py-1 bg-black/75 rounded text-[10px] font-mono text-[#DEAE78] flex items-center gap-1">
@@ -775,9 +781,9 @@ export default function ArticlesSection() {
                                     <span>Inspect</span>
                                   </div>
                                 </div>
-                                {altText && (
+                                {capText && (
                                   <figcaption className="p-3 text-xs text-[#D4D7DC] font-sans text-left">
-                                    {altText}
+                                    {capText}
                                   </figcaption>
                                 )}
                               </figure>
