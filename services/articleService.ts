@@ -28,9 +28,14 @@ export interface SupabaseCmsConfig {
   webhookUrl?: string;
 }
 
+// Public, read-only values (the anon key is safe in the browser; RLS only allows SELECT).
+// Vercel env vars win when present; these defaults keep the site working if they are missing.
+const PUBLIC_SUPABASE_URL = "https://jvbucspwcjahqpoxskvr.supabase.co";
+const PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_pWKg-jUXV_rTWksBvDnkhw_DIxBPyAS";
+
 export const DEFAULT_CMS_CONFIG: SupabaseCmsConfig = {
-  supabaseUrl: (import.meta as any).env?.VITE_SUPABASE_URL || "",
-  supabaseAnonKey: (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || "",
+  supabaseUrl: (import.meta as any).env?.VITE_SUPABASE_URL || PUBLIC_SUPABASE_URL,
+  supabaseAnonKey: (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || PUBLIC_SUPABASE_ANON_KEY,
   tableName: "articles",
   autoSync: false,
   webhookUrl: ""
