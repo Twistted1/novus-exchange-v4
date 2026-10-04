@@ -72,6 +72,14 @@ class SpeechServiceManager {
   private currentAudioUrl: string | null = null;
   private currentSessionId: number = 0;
 
+  // Browser (speechSynthesis) fallback state: free, works on any static host
+  private mode: "audio" | "browser" = "audio";
+  private synthChunks: string[] = [];
+  private synthIndex = 0;
+  private synthToken = 0;
+  private synthTotalChars = 0;
+  private static readonly CHARS_PER_SECOND = 15;
+
   public subscribe(listener: StateListener): () => void {
     this.listeners.add(listener);
     listener(this.state);
@@ -100,6 +108,8 @@ class SpeechServiceManager {
     let content = (article.content || article.excerpt || "")
       .split(/###\s*Sources/i)[0] // exclude bibliography/citations
       .replace(/^#{1,6}\s+/gm, "") // remove heading hashes
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, "") // drop illustrated-feature figures (not read aloud)
+      .replace(/\(https?:\/\/[^)\s]+\)/g, "") // drop bare source URLs in parentheses
       .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // replace markdown links with text
       .replace(/[*_~`]/g, "") // remove formatting symbols
       .replace(/---\s*/g, " ") // remove horizontal rules
@@ -155,6 +165,7 @@ class SpeechServiceManager {
   ): Promise<void> {
     const sessionId = ++this.currentSessionId;
     this.cleanupAudio();
+    this.stopBrowserVoice();
 
     const selectedVoiceId = voiceId || this.state.voiceId || "Christopher";
     const voiceObj = AVAILABLE_VOICES.find((v) => v.id === selectedVoiceId) || AVAILABLE_VOICES[0];
@@ -207,11 +218,12 @@ class SpeechServiceManager {
     } catch (err: any) {
       if (sessionId !== this.currentSessionId) return;
       console.error("[SpeechService] Neural playback error:", err);
+      if (this.startBrowserVoice(fullText, sessionId, startTimeSeconds, autoPlay)) return;
       this.state = {
         ...this.state,
         isLoading: false,
         isPlaying: false,
-        errorMessage: err?.message || "Failed to stream neural voice narration."
+        errorMessage: "Listen is unavailable: no neural voice server and this browser has no built-in voice."
       };
       this.notify();
     }
@@ -442,9 +454,117 @@ class SpeechServiceManager {
     }
   }
 
+  // ---------- Browser voice fallback (speechSynthesis) ----------
+  private chunkText(text: string): string[] {
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    const chunks: string[] = [];
+    let cur = "";
+    for (const s of sentences) {
+      if ((cur + " " + s).length > 220 && cur) {
+        chunks.push(cur.trim());
+        cur = s;
+      } else {
+        cur = cur ? cur + " " + s : s;
+      }
+    }
+    if (cur.trim()) chunks.push(cur.trim());
+    return chunks;
+  }
+
+  private pickBrowserVoice(): SpeechSynthesisVoice | null {
+    try {
+      const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith("en"));
+      if (!voices.length) return null;
+      const rank = (v: SpeechSynthesisVoice) =>
+        (/natural|neural|online/i.test(v.name) ? 3 : 0) + (/google|microsoft|samantha|daniel|alex/i.test(v.name) ? 1 : 0);
+      return voices.sort((a, b) => rank(b) - rank(a))[0];
+    } catch {
+      return null;
+    }
+  }
+
+  private startBrowserVoice(fullText: string, sessionId: number, startSeconds: number, autoPlay: boolean): boolean {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+    this.mode = "browser";
+    this.synthChunks = this.chunkText(fullText);
+    if (!this.synthChunks.length) return false;
+    this.synthTotalChars = this.synthChunks.reduce((n, c) => n + c.length, 0);
+    const startChars = Math.max(0, startSeconds) * SpeechServiceManager.CHARS_PER_SECOND * this.state.playbackRate;
+    let idx = 0;
+    let acc = 0;
+    while (idx < this.synthChunks.length - 1 && acc + this.synthChunks[idx].length < startChars) {
+      acc += this.synthChunks[idx].length;
+      idx++;
+    }
+    this.state = {
+      ...this.state,
+      isLoading: false,
+      isPlaying: true,
+      isPaused: !autoPlay,
+      voiceName: "Browser voice (this device)",
+      totalDurationSeconds: Math.round(this.synthTotalChars / (SpeechServiceManager.CHARS_PER_SECOND * this.state.playbackRate)),
+      errorMessage: null
+    };
+    this.notify();
+    if (sessionId !== this.currentSessionId) return true;
+    this.speakFrom(idx, autoPlay);
+    return true;
+  }
+
+  private speakFrom(index: number, autoPlay: boolean = true): void {
+    const token = ++this.synthToken;
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
+    this.synthIndex = index;
+    if (index >= this.synthChunks.length) {
+      this.stop();
+      return;
+    }
+    const done = this.synthChunks.slice(0, index).reduce((n, c) => n + c.length, 0);
+    const rate = this.state.playbackRate;
+    this.state = {
+      ...this.state,
+      elapsedSeconds: Math.round(done / (SpeechServiceManager.CHARS_PER_SECOND * rate)),
+      progress: Math.min(100, Math.round((done / Math.max(1, this.synthTotalChars)) * 100))
+    };
+    this.notify();
+    const u = new SpeechSynthesisUtterance(this.synthChunks[index]);
+    const voice = this.pickBrowserVoice();
+    if (voice) u.voice = voice;
+    u.lang = voice?.lang || "en-GB";
+    u.rate = rate;
+    u.onend = () => {
+      if (token !== this.synthToken || this.mode !== "browser") return;
+      this.speakFrom(index + 1);
+    };
+    u.onerror = (e: SpeechSynthesisErrorEvent) => {
+      if (token !== this.synthToken || this.mode !== "browser") return;
+      if (e.error === "canceled" || e.error === "interrupted") return;
+      this.state = { ...this.state, isPlaying: false, isPaused: false, errorMessage: "The browser voice stopped: " + e.error };
+      this.notify();
+    };
+    window.speechSynthesis.speak(u);
+    if (!autoPlay) window.speechSynthesis.pause();
+  }
+
+  private stopBrowserVoice(): void {
+    this.synthToken++;
+    if (this.mode === "browser") {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+    this.mode = "audio";
+    this.synthChunks = [];
+    this.synthIndex = 0;
+  }
+
   public pause(): void {
     if (!this.state.isPlaying) return;
-    if (this.audioElement) {
+    if (this.mode === "browser") {
+      try { window.speechSynthesis.pause(); } catch {}
+    } else if (this.audioElement) {
       this.audioElement.pause();
     }
     this.state = { ...this.state, isPaused: true };
@@ -453,7 +573,9 @@ class SpeechServiceManager {
 
   public resume(): void {
     if (!this.state.isPlaying || !this.state.isPaused) return;
-    if (this.audioElement) {
+    if (this.mode === "browser") {
+      try { window.speechSynthesis.resume(); } catch {}
+    } else if (this.audioElement) {
       this.audioElement.play().catch(() => {});
     }
     this.state = { ...this.state, isPaused: false };
@@ -469,6 +591,11 @@ class SpeechServiceManager {
   }
 
   public seek(progressPercent: number): void {
+    if (this.mode === "browser") {
+      const target = Math.floor((progressPercent / 100) * this.synthChunks.length);
+      this.speakFrom(Math.max(0, Math.min(this.synthChunks.length - 1, target)), !this.state.isPaused);
+      return;
+    }
     if (this.audioElement && this.audioElement.duration) {
       const targetTime = (progressPercent / 100) * this.audioElement.duration;
       this.audioElement.currentTime = targetTime;
@@ -483,6 +610,11 @@ class SpeechServiceManager {
 
   public setPlaybackRate(rate: number): void {
     this.state = { ...this.state, playbackRate: rate };
+    if (this.mode === "browser") {
+      this.notify();
+      this.speakFrom(this.synthIndex, !this.state.isPaused);
+      return;
+    }
     if (this.audioElement) {
       this.audioElement.playbackRate = rate;
     }
@@ -490,6 +622,16 @@ class SpeechServiceManager {
   }
 
   public skipSeconds(seconds: number): void {
+    if (this.mode === "browser") {
+      let idx = this.synthIndex;
+      let remaining = Math.abs(seconds) * SpeechServiceManager.CHARS_PER_SECOND * this.state.playbackRate;
+      while (remaining > 0 && idx >= 0 && idx < this.synthChunks.length) {
+        remaining -= this.synthChunks[Math.max(0, Math.min(idx, this.synthChunks.length - 1))].length;
+        idx += seconds > 0 ? 1 : -1;
+      }
+      this.speakFrom(Math.max(0, Math.min(this.synthChunks.length - 1, idx)), !this.state.isPaused);
+      return;
+    }
     if (this.audioElement) {
       const cur = this.audioElement.currentTime;
       const dur = this.audioElement.duration || 0;
@@ -500,6 +642,7 @@ class SpeechServiceManager {
   public stop(): void {
     this.currentSessionId++;
     this.cleanupAudio();
+    this.stopBrowserVoice();
 
     this.state = {
       ...this.state,

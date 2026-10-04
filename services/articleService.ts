@@ -1,7 +1,7 @@
 import { Article } from "../types";
-import { ARTICLES_DATA } from "../data/articlesData";
+import { ARTICLES_DATA, AUTHORS } from "../data/articlesData";
 
-const STORAGE_KEY = "novus_exchange_articles_v8";
+const STORAGE_KEY = "novus_exchange_articles_v9";
 const CMS_CONFIG_KEY = "novus_exchange_cms_config_v1";
 
 // Clean any stale or corrupted legacy keys from prior sessions
@@ -14,6 +14,7 @@ try {
     window.localStorage.removeItem("novus_exchange_articles_v5");
     window.localStorage.removeItem("novus_exchange_articles_v6");
     window.localStorage.removeItem("novus_exchange_articles_v7");
+    window.localStorage.removeItem("novus_exchange_articles_v8");
   }
 } catch {
   // Ignore storage access restrictions
@@ -42,9 +43,14 @@ export class ArticleService {
     const computedWords = content.trim().split(/\s+/).filter(Boolean).length;
     const wordCount = typeof raw.wordCount === "number" ? raw.wordCount : (typeof raw.word_count === "number" ? raw.word_count : computedWords);
 
-    const author = raw.author && typeof raw.author.name === "string" 
-      ? raw.author 
-      : fallback.author;
+    const authorId = String(raw.author_id || "").toLowerCase();
+    const author = raw.author && typeof raw.author.name === "string"
+      ? raw.author
+      : authorId.includes("marcio")
+        ? AUTHORS["Marcio"]
+        : authorId.includes("novus")
+          ? AUTHORS["Novus AI"]
+          : fallback.author;
 
     return {
       id: typeof raw.id === "number" ? raw.id : index + 1,
@@ -60,73 +66,44 @@ export class ArticleService {
       author,
       featured: typeof raw.featured === "boolean" ? raw.featured : false,
       subtitle: typeof raw.subtitle === "string" ? raw.subtitle : undefined,
-      isIllustratedFeature: typeof raw.isIllustratedFeature === "boolean" ? raw.isIllustratedFeature : false,
+      isIllustratedFeature: typeof raw.isIllustratedFeature === "boolean" ? raw.isIllustratedFeature : /^!\[[^\]]*\]\(/m.test(content),
       figures: Array.isArray(raw.figures) ? raw.figures : undefined,
       keyMetrics: Array.isArray(raw.keyMetrics) ? raw.keyMetrics : undefined,
       pullQuotes: Array.isArray(raw.pullQuotes) ? raw.pullQuotes : undefined
     };
   }
 
+  private static normTitle(t: string): string {
+    return (t || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  }
+
   /**
    * Retrieves active articles.
-   * Priority Flow:
-   * 1. Check persistent Backend Server API (/api/articles) for cross-browser synchronization.
-   * 2. Reconcile with any local browser drafts (auto-syncing local drafts to the server so they become visible on all browsers).
-   * 3. Check Supabase REST if configured.
-   * 4. Fall back to bundled verified baseline dossiers.
+   * 1. Bundled seed articles are the offline fallback.
+   * 2. This browser's own CMS drafts (local storage) are layered on top.
+   * 3. Supabase (public.articles, read with the public anon key baked in at build time via
+   *    VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY) is read for EVERY visitor and wins by id.
+   *    A seed/local article with the same title as a Supabase article is dropped (no duplicates).
    */
   static async getArticles(): Promise<Article[]> {
-    // 1. Establish the 6 verified canonical dossiers as the baseline bedrock
     const baseArticles = ARTICLES_DATA.map((item, idx) => this.sanitizeArticle(item, idx));
     const articleMap = new Map<number, Article>(baseArticles.map((a) => [a.id, a]));
 
-    let serverFetched = false;
-
-    // 2. Fetch from persistent Server API (Universal across all browsers)
-    try {
-      const res = await fetch("/api/articles");
-      if (res.ok) {
-        const data = await res.json();
-        const serverArticles: any[] = Array.isArray(data) ? data : (data.articles || []);
-        if (serverArticles.length > 0) {
-          serverArticles.forEach((item, idx) => {
-            const sanitized = this.sanitizeArticle(item, idx);
-            articleMap.set(sanitized.id, sanitized);
-          });
-          serverFetched = true;
-        }
-      }
-    } catch {
-      // Server API unreachable (offline or pure static preview)
-    }
-
-    // 3. Inspect browser local storage for any client-side additions/edits
     try {
       const local = localStorage.getItem(STORAGE_KEY);
       if (local) {
         const parsed = JSON.parse(local);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          let hasLocalNewAdditions = false;
+        if (Array.isArray(parsed)) {
           parsed.forEach((item, idx) => {
             const sanitized = this.sanitizeArticle(item, idx);
-            if (!articleMap.has(sanitized.id)) {
-              hasLocalNewAdditions = true;
-            }
             articleMap.set(sanitized.id, sanitized);
           });
-
-          // If local storage has articles not yet on the server, automatically push to server!
-          if (hasLocalNewAdditions || (!serverFetched && parsed.length > 0)) {
-            const allArticles = Array.from(articleMap.values()).sort((a, b) => a.id - b.id);
-            this.pushArticlesToServer(allArticles).catch(() => {});
-          }
         }
       }
     } catch (e) {
       console.warn("Could not read local articles storage:", e);
     }
 
-    // 4. Query Supabase REST if configured
     const config = this.getCmsConfig();
     if (config.supabaseUrl && config.supabaseAnonKey) {
       try {
@@ -137,54 +114,38 @@ export class ArticleService {
             Authorization: `Bearer ${config.supabaseAnonKey}`
           }
         });
-
         if (res.ok) {
           const remoteArticles: any[] = await res.json();
           if (Array.isArray(remoteArticles) && remoteArticles.length > 0) {
-            remoteArticles.forEach((item, idx) => {
-              const sanitized = this.sanitizeArticle(item, idx);
-              articleMap.set(sanitized.id, sanitized);
+            const remote = remoteArticles.map((item, idx) => this.sanitizeArticle(item, idx));
+            const remoteTitles = new Map<string, number>(remote.map((r) => [this.normTitle(r.title), r.id]));
+            Array.from(articleMap.values()).forEach((a) => {
+              const rid = remoteTitles.get(this.normTitle(a.title));
+              if (rid !== undefined && rid !== a.id) articleMap.delete(a.id);
             });
+            remote.forEach((r) => articleMap.set(r.id, r));
           }
+        } else {
+          console.warn("Supabase responded with status", res.status);
         }
       } catch (err) {
-        console.warn("Supabase fetch failed, retaining baseline and local articles:", err);
+        console.warn("Supabase fetch failed, retaining baseline articles:", err);
       }
     }
 
-    // 5. Final combined articles sorted by ID
     const finalArticles = Array.from(articleMap.values()).sort((a, b) => a.id - b.id);
-
-    // Cache locally for instant loading on subsequent renders
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(finalArticles));
     } catch {}
-
     return finalArticles;
   }
 
-  static async pushArticlesToServer(articles: Article[]): Promise<boolean> {
-    try {
-      const res = await fetch("/api/articles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ articles })
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
+  static async pushArticlesToServer(_articles: Article[]): Promise<boolean> {
+    // No backend server on this deployment (static site + Supabase).
+    return false;
   }
 
   static async checkServerStatus(): Promise<{ online: boolean; count: number }> {
-    try {
-      const res = await fetch("/api/articles");
-      if (res.ok) {
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : (data.articles || []);
-        return { online: true, count: list.length };
-      }
-    } catch {}
     return { online: false, count: 0 };
   }
 
@@ -197,8 +158,6 @@ export class ArticleService {
     }
 
     // Asynchronously push to persistent server so it is visible to ALL browsers and devices
-    this.pushArticlesToServer(articles).catch(() => {});
-
     // Asynchronously push to Supabase if configured
     this.syncAllArticlesToSupabase(articles).catch(() => {});
   }
@@ -212,9 +171,6 @@ export class ArticleService {
     } catch (e) {
       console.error("Failed to reset articles in localStorage:", e);
     }
-
-    // Reset on backend server API
-    fetch("/api/articles/reset", { method: "POST" }).catch(() => {});
 
     // Also sync all 6 canonical dossiers to Supabase if connected
     this.syncAllArticlesToSupabase(fresh).catch(() => {});
@@ -272,7 +228,14 @@ export class ArticleService {
     try {
       const stored = localStorage.getItem(CMS_CONFIG_KEY);
       if (stored) {
-        return { ...DEFAULT_CMS_CONFIG, ...JSON.parse(stored) };
+        const parsed = JSON.parse(stored);
+        return {
+          ...DEFAULT_CMS_CONFIG,
+          ...parsed,
+          // Build-time project settings always win over anything stored in a visitor's browser
+          supabaseUrl: DEFAULT_CMS_CONFIG.supabaseUrl || parsed.supabaseUrl || "",
+          supabaseAnonKey: DEFAULT_CMS_CONFIG.supabaseAnonKey || parsed.supabaseAnonKey || ""
+        };
       }
     } catch (e) {
       console.warn("Could not read CMS config from localStorage:", e);
@@ -328,38 +291,7 @@ export class ArticleService {
   /**
    * Upload an image file directly to the backend /api/upload endpoint
    */
-  static async uploadImage(file: File): Promise<{ success: boolean; url?: string; error?: string }> {
-    try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          data: base64,
-          filename: file.name
-        })
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Upload failed with status ${res.status}: ${errText}`);
-      }
-
-      const json = await res.json();
-      if (!json.success || !json.url) {
-        throw new Error(json.message || "Failed to save uploaded image.");
-      }
-
-      return { success: true, url: json.url };
-    } catch (e: any) {
-      console.error("[ArticleService] Upload error:", e);
-      return { success: false, error: e.message || "Failed to upload image" };
-    }
+  static async uploadImage(_file: File): Promise<{ success: boolean; url?: string; error?: string }> {
+    return { success: false, error: "Image upload is not available on this deployment. Upload the file to R2 and paste its public URL." };
   }
 }
