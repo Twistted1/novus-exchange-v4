@@ -1,7 +1,30 @@
-import { useState } from "react";
+import { useState, MouseEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import LogoIcon from "./LogoIcon";
 import SocialLinks from "./SocialMediaIcons";
 import { Check, ArrowRight, ShieldCheck } from "lucide-react";
+
+function SectionLink({ sectionId, children }: { sectionId: string; children: string }) {
+  const navigate = useNavigate();
+
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    const element = document.getElementById(sectionId);
+    if (element) {
+      const offset = 76;
+      const top = element.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top, behavior: "smooth" });
+      return;
+    }
+    navigate("/", { state: { scrollTo: sectionId } });
+  };
+
+  return (
+    <a href={`#${sectionId}`} onClick={handleClick} className="text-[#A1A5AB] hover:text-white transition-colors">
+      {children}
+    </a>
+  );
+}
 
 export default function FooterSection() {
   const [email, setEmail] = useState("");
@@ -60,11 +83,16 @@ export default function FooterSection() {
               Platform
             </h4>
             <ul className="space-y-2.5 font-mono text-xs">
-              <li><a href="#home" className="text-[#A1A5AB] hover:text-white transition-colors">Home Wire</a></li>
-              <li><a href="#about" className="text-[#A1A5AB] hover:text-white transition-colors">About Us</a></li>
-              <li><a href="#solutions" className="text-[#A1A5AB] hover:text-white transition-colors">Infrastructure</a></li>
-              <li><a href="#trending" className="text-[#A1A5AB] hover:text-white transition-colors">Trending Indices</a></li>
-              <li><a href="#articles" className="text-[#A1A5AB] hover:text-white transition-colors">Intelligence Archive</a></li>
+              <li><SectionLink sectionId="home">Home Wire</SectionLink></li>
+              <li><SectionLink sectionId="about">About Us</SectionLink></li>
+              <li><SectionLink sectionId="solutions">Infrastructure</SectionLink></li>
+              <li><SectionLink sectionId="trending">Trending Indices</SectionLink></li>
+              <li><SectionLink sectionId="articles">Intelligence Archive</SectionLink></li>
+              <li>
+                <Link to="/cost-of-living-uk-budget-2026" className="text-[#A1A5AB] hover:text-white transition-colors">
+                  UK Budget 2026
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -74,12 +102,12 @@ export default function FooterSection() {
               Topics
             </h4>
             <ul className="space-y-2 font-mono text-xs">
-              <li><a href="#articles" className="text-[#A1A5AB] hover:text-white transition-colors">Geopolitics</a></li>
-              <li><a href="#articles" className="text-[#A1A5AB] hover:text-white transition-colors">Economics</a></li>
-              <li><a href="#articles" className="text-[#A1A5AB] hover:text-white transition-colors">Tech-AI</a></li>
-              <li><a href="#articles" className="text-[#A1A5AB] hover:text-white transition-colors">Green-Tech</a></li>
-              <li><a href="#articles" className="text-[#A1A5AB] hover:text-white transition-colors">CSR</a></li>
-              <li><a href="#articles" className="text-[#A1A5AB] hover:text-white transition-colors">Brazil</a></li>
+              <li><SectionLink sectionId="articles">Geopolitics</SectionLink></li>
+              <li><SectionLink sectionId="articles">Economics</SectionLink></li>
+              <li><SectionLink sectionId="articles">Tech-AI</SectionLink></li>
+              <li><SectionLink sectionId="articles">Green-Tech</SectionLink></li>
+              <li><SectionLink sectionId="articles">CSR</SectionLink></li>
+              <li><SectionLink sectionId="articles">Brazil</SectionLink></li>
             </ul>
           </div>
 

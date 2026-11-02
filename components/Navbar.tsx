@@ -1,6 +1,22 @@
 import { useState, useEffect, MouseEvent } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search, Menu, X, Palette } from "lucide-react";
 import LogoIcon from "./LogoIcon";
+
+const BUDGET_PATH = "/cost-of-living-uk-budget-2026";
+
+type NavItem =
+  | { label: string; kind: "section"; href: string }
+  | { label: string; kind: "route"; to: string };
+
+const NAV_LINKS: NavItem[] = [
+  { label: "Home", kind: "section", href: "home" },
+  { label: "About", kind: "section", href: "about" },
+  { label: "Solutions", kind: "section", href: "solutions" },
+  { label: "Trending", kind: "section", href: "trending" },
+  { label: "Articles", kind: "section", href: "articles" },
+  { label: "Budget", kind: "route", to: BUDGET_PATH },
+];
 
 interface NavbarProps {
   activeSection: string;
@@ -9,9 +25,12 @@ interface NavbarProps {
 }
 
 export default function Navbar({ activeSection, onNavigate, onOpenPaletteModal }: NavbarProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isScrolled, setIsScrolled] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const onBudgetPage = location.pathname === BUDGET_PATH;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -21,40 +40,30 @@ export default function Navbar({ activeSection, onNavigate, onOpenPaletteModal }
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const navLinks = [
-    { label: "Home", href: "home" },
-    { label: "About", href: "about" },
-    { label: "Solutions", href: "solutions" },
-    { label: "Trending", href: "trending" },
-    { label: "Articles", href: "articles" }
-  ];
-
-  const handleNavClick = (e: MouseEvent, href: string) => {
-    e.preventDefault();
+  const goToSection = (href: string) => {
     onNavigate(href);
     setMobileMenuOpen(false);
 
     const element = document.getElementById(href);
-    if (element) {
+    if (element && location.pathname === "/") {
       const offset = 76;
-      const elementPosition = element.getBoundingClientRect().top + window.scrollY;
-      window.scrollTo({
-        top: elementPosition - offset,
-        behavior: "smooth"
-      });
+      const top = element.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top, behavior: "smooth" });
+      return;
     }
+
+    navigate("/", { state: { scrollTo: href } });
+  };
+
+  const handleNavClick = (e: MouseEvent, href: string) => {
+    e.preventDefault();
+    goToSection(href);
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      onNavigate("articles");
-      const element = document.getElementById("articles");
-      if (element) {
-        const offset = 76;
-        const pos = element.getBoundingClientRect().top + window.scrollY;
-        window.scrollTo({ top: pos - offset, behavior: "smooth" });
-      }
+      goToSection("articles");
     }
   };
 
@@ -70,7 +79,7 @@ export default function Navbar({ activeSection, onNavigate, onOpenPaletteModal }
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between gap-4">
         {/* Zone 1: Brand Wordmark (Single cohesive brand lockup) */}
         <a
-          href="#home"
+          href="#/"
           onClick={(e) => handleNavClick(e, "home")}
           className="flex items-center gap-3 group focus:outline-none"
         >
@@ -91,9 +100,28 @@ export default function Navbar({ activeSection, onNavigate, onOpenPaletteModal }
         </a>
 
         {/* Zone 2: 4-6 Nav Links */}
-        <div className="hidden md:flex items-center space-x-7">
-          {navLinks.map((link) => {
-            const isActive = activeSection === link.href;
+        <div className="hidden md:flex items-center space-x-5 xl:space-x-7">
+          {NAV_LINKS.map((link) => {
+            if (link.kind === "route") {
+              const isActive = onBudgetPage;
+              return (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`text-xs uppercase font-medium tracking-wider transition-all duration-200 whitespace-nowrap relative py-1 ${
+                    isActive ? "text-white font-bold" : "text-[#A1A5AB] hover:text-white"
+                  }`}
+                >
+                  {link.label}
+                  {isActive && (
+                    <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#C92A35] via-[#A36E3C] to-[#C92A35] rounded-full" />
+                  )}
+                </Link>
+              );
+            }
+
+            const isActive = !onBudgetPage && activeSection === link.href;
             return (
               <a
                 key={link.href}
@@ -155,20 +183,42 @@ export default function Navbar({ activeSection, onNavigate, onOpenPaletteModal }
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-[#06080C]/98 border-b border-[#A36E3C]/20 px-6 py-4 space-y-3 animate-fadeIn">
-          {navLinks.map((link) => (
-            <a
-              key={link.href}
-              href={`#${link.href}`}
-              onClick={(e) => handleNavClick(e, link.href)}
-              className={`block text-xs uppercase tracking-wider py-1.5 ${
-                activeSection === link.href
-                  ? "text-white font-bold border-l-2 border-[#C92A35] pl-2"
-                  : "text-[#A1A5AB] hover:text-white pl-2"
-              }`}
-            >
-              {link.label}
-            </a>
-          ))}
+          {NAV_LINKS.map((link) => {
+            if (link.kind === "route") {
+              const isActive = onBudgetPage;
+              return (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  onClick={() => setMobileMenuOpen(false)}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`block text-xs uppercase tracking-wider py-1.5 ${
+                    isActive
+                      ? "text-white font-bold border-l-2 border-[#C92A35] pl-2"
+                      : "text-[#A1A5AB] hover:text-white pl-2"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              );
+            }
+
+            const isActive = !onBudgetPage && activeSection === link.href;
+            return (
+              <a
+                key={link.href}
+                href={`#${link.href}`}
+                onClick={(e) => handleNavClick(e, link.href)}
+                className={`block text-xs uppercase tracking-wider py-1.5 ${
+                  isActive
+                    ? "text-white font-bold border-l-2 border-[#C92A35] pl-2"
+                    : "text-[#A1A5AB] hover:text-white pl-2"
+                }`}
+              >
+                {link.label}
+              </a>
+            );
+          })}
           {onOpenPaletteModal && (
             <button
               onClick={() => {

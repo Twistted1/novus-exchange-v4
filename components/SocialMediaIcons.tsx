@@ -43,8 +43,8 @@ export const OFFICIAL_SOCIALS: SocialItem[] = [
   {
     id: "fb",
     name: "Facebook",
-    handle: "@novusexchange",
-    url: "https://www.facebook.com/novusexchange",
+    handle: "marcioeditions",
+    url: "https://www.facebook.com/marcioeditions",
     brandColor: "#1877F2",
     bgColor: "bg-[#1877F2]/10",
     hoverBorder: "hover:border-[#1877F2]/60",

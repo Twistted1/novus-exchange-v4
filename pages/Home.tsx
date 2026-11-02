@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import HeroSection from "../components/HeroSection";
 import TrendingSection from "../components/TrendingSection";
@@ -8,8 +9,29 @@ import ArticlesSection from "../components/ArticlesSection";
 import FooterSection from "../components/FooterSection";
 import ChatWidget from "../components/ChatWidget";
 
+type HomeLocationState = {
+  scrollTo?: string;
+};
+
 export default function Home() {
+  const location = useLocation();
   const [activeSection, setActiveSection] = useState("home");
+
+  useEffect(() => {
+    const scrollTo = (location.state as HomeLocationState | null)?.scrollTo;
+    if (!scrollTo) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.getElementById(scrollTo);
+      if (!element) return;
+      const offset = 76;
+      const top = element.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top, behavior: "smooth" });
+      setActiveSection(scrollTo);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.key, location.state]);
 
   useEffect(() => {
     const handleScroll = () => {
